@@ -13,7 +13,9 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "test:douyu": "ts-node src/services/__tests__/douyu.test.ts",
-    "test:danmaku": "ts-node src/services/__tests__/danmaku.test.ts"
+    "test:danmaku": "ts-node src/services/__tests__/danmaku.test.ts",
+    "build:win": "npm run build && electron-builder --win --x64",
+    "build:linux": "npm run build && electron-builder --linux --x64"
   },
   "build": {
     "appId": "com.yourdomain.dtv",
@@ -37,7 +39,10 @@
     },
     "linux": {
       "icon": "build/icon.png",
-      "target": ["AppImage"]
+      "target": ["AppImage"],
+      "category": "Network",
+      "maintainer": "c-zeong",
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "files": [
       "dist/**/*",
