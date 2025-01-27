@@ -87,9 +87,9 @@ impl DouYu {
 
         println!("Building sign function");
         // 构造签名函数
-        let mut func_sign = res.replace("return rt;})", "return rt;}");
-        func_sign = func_sign.replace("(function (", "function sign(");
-        func_sign = func_sign.replace("CryptoJS.MD5(cb).toString()", &format!("\"{}\"", rb));
+        let func_sign = res.replace("return rt;})", "return rt;}");
+        let func_sign = func_sign.replace("(function (", "function sign(");
+        let func_sign = func_sign.replace("CryptoJS.MD5(cb).toString()", &format!("\"{}\"", rb));
 
         context.eval(&func_sign)?;
         let sign_call = format!(
