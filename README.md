@@ -58,3 +58,7 @@ npm run tauri dev
 # 打包构建
 npm run tauri build      # 构建当前系统的安装包
 ```
+
+##  参考
+
+- 直播流获取参考了 [@wbt5/real-url](https://github.com/wbt5/real-url) 项目并改写为 TypeScript 版本 
