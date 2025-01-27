@@ -29,7 +29,7 @@
 
 ## 安装方式
 
-可以在 [release](https://github.com/c-zeong/dtv/releases) 目录下载对应系统的安装包
+可以在 [release](https://github.com/c-zeong/dtv/releases) 目录下载对应系统的安装包, 也可以通过源码编译安装
 
 ## 编译
 
