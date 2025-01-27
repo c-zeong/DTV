@@ -1,13 +1,14 @@
 <div align="center">
   <img src="images/icon.png" alt="DTV Logo" width="128" height="128">
   <h1>DTV</h1>
-  <p>基于 Tauri 2.0 的跨平台非官方斗鱼直播精简版桌面客户端</p>
+  <p>基于 Tauri 2.0 的跨平台轻量版非官方斗鱼直播桌面客户端</p>
 </div>
+
 
 
 ## 说明
 
-1. 本项目基于 Tauri 2.0 开发，最初基于 Electron 开发的版本已存放于 [electron-legacy](https://github.com/c-zeong/DTV/tree/electron-legacy) 分支
+1. 本项目基于 Tauri 2.0 开发，体积小，占用率低。最初基于 Electron 开发的版本已存放于 [electron-legacy](https://github.com/c-zeong/DTV/tree/electron-legacy) 分支，可以做对比
 2. 搜索接口有访问频率限制，过于频繁的搜索请求会触发验证码校验，建议合理使用搜索功能
 3. 本项目仅供学习编程目的使用，未进行任何逆向工程
 
