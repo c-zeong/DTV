@@ -39,7 +39,7 @@
 
 可以在 [release](https://github.com/c-zeong/dtv/releases) 目录下载对应系统的安装包, 也可以通过源码编译安装
 
-ps:目前只测试了Intel的dmg包，其他包都是通过GitHub action编译，并没测试
+ps:目前只测试了Intel的dmg包，其他包都是通过GitHub Action编译，并没测试
 
 ## 编译
 
