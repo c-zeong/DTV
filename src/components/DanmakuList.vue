@@ -219,6 +219,10 @@ onUnmounted(async () => {
   line-height: 1.5;
   font-size: 13px;
   font-weight: 400;
+  word-wrap: break-word;
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-width: 100%;
 }
 
 /* 自定义滚动条样式 */
