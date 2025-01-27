@@ -1,16 +1,56 @@
-# Tauri + Vue + TypeScript
+<div align="center">
+  <img src="images/icon.png" alt="DTV Logo" width="128" height="128">
+  <h1>DTV</h1>
+  <p>基于 Tauri 2.0 的跨平台非官方斗鱼直播精简版桌面客户端</p>
+</div>
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+## 说明
 
-## Recommended IDE Setup
+1. 本项目基于 Tauri 2.0 开发，最初基于 Electron 开发的版本已存放于 [electron-legacy](https://github.com/c-zeong/DTV/tree/electron-legacy) 分支
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+2. 搜索接口有访问频率限制，过于频繁的搜索请求会触发验证码校验，建议合理使用搜索功能
 
-## Type Support For `.vue` Imports in TS
+3. 本项目仅供学习编程目的使用，未进行任何逆向工程
 
-Since TypeScript cannot handle type information for `.vue` imports, they are shimmed to be a generic Vue component type by default. In most cases this is fine if you don't really care about component prop types outside of templates. However, if you wish to get actual prop types in `.vue` imports (for example to get props validation when using manual `h(...)` calls), you can enable Volar's Take Over mode by following these steps:
+## 软件截图
 
-1. Run `Extensions: Show Built-in Extensions` from VS Code's command palette, look for `TypeScript and JavaScript Language Features`, then right click and select `Disable (Workspace)`. By default, Take Over mode will enable itself if the default TypeScript extension is disabled.
-2. Reload the VS Code window by running `Developer: Reload Window` from the command palette.
+<div align="center">
+  <div style="display: flex; justify-content: center; gap: 20px;">
+    <div>
+      <img src="images/iShot_light.png" alt="日间模式" width="400">
+      <p>日间模式</p>
+    </div>
+    <div>
+      <img src="images/iShot_dark.png" alt="夜间模式" width="400"> 
+      <p>夜间模式</p>
+    </div>
+  </div>
+</div>
 
-You can learn more about Take Over mode [here](https://github.com/johnsoncodehk/volar/discussions/471).
+## 安装方式
+
+可以在 [release](https://github.com/c-zeong/dtv/releases) 目录下载对应系统的安装包
+
+## 编译
+
+```bash
+# 克隆项目
+git clone https://github.com/c-zeong/dtv.git
+cd dtv
+
+# 安装依赖
+npm install
+
+# 开发调试
+npm run tauri dev
+
+# 打包构建
+npm run tauri build      # 构建当前系统的安装包
+
+# 构建产物位置
+# macOS: src-tauri/target/release/bundle/
+# Windows: src-tauri/target/release/bundle/
+# Linux: src-tauri/target/release/bundle/
+```
+
+注意：需要在对应的操作系统下进行构建，Tauri 不支持跨平台编译。

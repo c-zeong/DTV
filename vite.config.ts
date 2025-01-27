@@ -24,13 +24,6 @@ export default defineConfig(async () => ({
           port: 2897,
         }
       : undefined,
-    proxy: {
-      '/api': {
-        target: 'https://www.douyu.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
-      }
-    },
     watch: {
       // 3. tell vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
