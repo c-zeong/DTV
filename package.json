@@ -16,7 +16,8 @@
     "artplayer": "^5.1.1",
     "artplayer-plugin-danmuku": "^5.1.4",
     "mpegts.js": "1.7.3",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

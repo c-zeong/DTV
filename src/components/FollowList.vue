@@ -36,21 +36,318 @@
           @mousedown="handleMouseDown($event, index)"
           @click="handleClick($event, streamer)"
         >
-          <div class="card-avatar">
-            <img :src="streamer.avatarUrl" :alt="streamer.nickname">
-          </div>
-          <div class="card-info">
-            <div class="streamer-name">
-              {{ streamer.nickname }}
+          <div class="card-content">
+            <div class="card-avatar">
+              <img :src="streamer.avatarUrl" :alt="streamer.nickname">
+              <div class="status-dot" :class="{ 'is-live': streamer.isLive }"></div>
             </div>
-            <div class="room-title">{{ streamer.roomTitle }}</div>
+            <div class="card-info">
+              <div class="streamer-row">
+                <span class="streamer-name">{{ streamer.nickname }}</span>
+                <span v-if="streamer.isLive" class="live-badge">
+                  <span class="dot"></span>
+                  直播中
+                </span>
+              </div>
+              <div class="room-title">{{ streamer.roomTitle }}</div>
+            </div>
           </div>
-          <div class="status-dot" :class="{ 'is-live': streamer.isLive }"></div>
+          <div class="card-actions">
+            <div class="action-dot"></div>
+            <div class="action-dot"></div>
+            <div class="action-dot"></div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.follow-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.list-header {
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.list-header h3 {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.refresh-btn {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.refresh-btn.refreshing {
+  opacity: 0.5;
+}
+
+.list-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.streamers-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.streamer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.streamer-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+}
+
+.card-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.streamer-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateX(4px);
+}
+
+.streamer-card.live {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.card-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.streamer-card:hover .card-avatar {
+  transform: scale(1.05);
+}
+
+.card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.status-dot.is-live {
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.streamer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.streamer-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.live-badge .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.room-title {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.streamer-card:hover .room-title {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.card-actions {
+  display: flex;
+  gap: 2px;
+  padding-left: 12px;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: all 0.2s ease;
+}
+
+.streamer-card:hover .card-actions {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.action-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+}
+
+/* 滚动条样式 */
+.list-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.list-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.list-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.list-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Empty State Styles */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.empty-icon {
+  width: 32px;
+  height: 32px;
+  color: rgba(255, 255, 255, 0.2);
+  margin-bottom: 8px;
+}
+
+.empty-state h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.4);
+}
+</style>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
@@ -226,197 +523,3 @@ onMounted(async () => {
   await refreshList();
 });
 </script>
-
-<style scoped>
-.follow-list {
-  width: 240px;
-  background: var(--component-bg);
-  border-radius: 12px;
-  margin: 16px 0 16px 16px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 24px var(--shadow-color);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.list-header {
-  padding: 16px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--component-bg);
-}
-
-.list-header h3 {
-  margin: 0;
-  font-size: 14px;
-  color: var(--primary-text);
-}
-
-.refresh-btn {
-  padding: 4px 12px;
-  border-radius: 4px;
-  border: none;
-  background: #2196f3;
-  color: #ffffff;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  height: 24px;
-  line-height: 24px;
-  display: flex;
-  align-items: center;
-}
-
-.refresh-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  background: #1e88e5;
-}
-
-.refresh-btn.refreshing {
-  background: #1976d2;
-}
-
-.list-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-}
-
-.streamers-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.streamer-card {
-  padding: 8px 8px 8px 6px;
-  border-radius: 8px;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  cursor: grab;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-  position: relative;
-  user-select: none;
-}
-
-.streamer-card:hover {
-  background: var(--card-hover-bg);
-}
-
-.streamer-card.dragging {
-  opacity: 0.5;
-  background: var(--card-hover-bg);
-}
-
-.card-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  margin: 0 2px;
-  border: 2px solid var(--border-color);
-}
-
-.card-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.card-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.streamer-name {
-  font-size: 14px;
-  color: var(--primary-text);
-  font-weight: 500;
-}
-
-.room-title {
-  font-size: 12px;
-  color: var(--secondary-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 600;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--status-offline);
-  flex-shrink: 0;
-}
-
-.status-dot.is-live {
-  background: var(--status-live);
-  box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
-}
-
-/* 自定义滚动条样式 */
-.list-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.list-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.list-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-.list-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 16px;
-  text-align: center;
-  height: 100%;
-  color: var(--secondary-text);
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  color: var(--secondary-text);
-  opacity: 0.8;
-  margin-bottom: 16px;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  color: var(--primary-text);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-}
-</style> 

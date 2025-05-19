@@ -9,11 +9,11 @@ export interface Streamer {
 export interface LiveAnchorItem {
   roomId: string;
   userName: string;
-  avatar?: string;
+  avatar: string | null;  
   liveStatus: boolean;
-  fansCount?: string;
-  category?: string;
-  description?: string;
+  fansCount: string | null;  
+  category: string | null;  
+  description: string | null; 
 }
 
 export interface RoomInfo {
@@ -24,4 +24,4 @@ export interface RoomInfo {
     videoLoop: string;
     avatar_mid: string;
   }
-} 
+}

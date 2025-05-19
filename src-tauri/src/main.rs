@@ -1,15 +1,23 @@
 // 在开发模式下允许控制台窗口
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::generate_handler;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 use std::sync::Arc;
-use reqwest::header::{HeaderMap, HeaderValue};
+// 移除这一行，因为未使用
+// use reqwest::header::{HeaderMap, HeaderValue};
 
 mod douyu;
 mod danmaku;
 mod proxy;
+mod api;
+
+use api::category::fetch_categories;  
+use api::live_list::{fetch_live_list, fetch_live_list_for_cate3};
+use api::room_info::fetch_room_info;  
+use api::three_cate::fetch_three_cate;  // 添加这一行
+
+
 
 struct DanmakuState(Mutex<Option<mpsc::Sender<()>>>);
 struct ProxyState(Arc<proxy::ProxyServer>);
@@ -80,47 +88,28 @@ async fn set_stream_url(url: String, state: tauri::State<'_, ProxyState>) -> Res
     Ok(())
 }
 
-#[tauri::command]
-async fn fetch_room_info(room_id: String) -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::new();
-    
-    let mut headers = HeaderMap::new();
-    headers.insert("Accept", HeaderValue::from_static("application/json, text/plain, */*"));
-    headers.insert("Accept-Language", HeaderValue::from_static("zh-CN,zh;q=0.9"));
-    headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
-    headers.insert("Pragma", HeaderValue::from_static("no-cache"));
-    headers.insert("Referer", HeaderValue::from_str(&format!("https://www.douyu.com/{}", room_id)).unwrap());
-    headers.insert("User-Agent", HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"));
 
-    let response = client
-        .get(format!("https://www.douyu.com/betard/{}", room_id))
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let data = response
-        .json::<serde_json::Value>()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(data)
-}
-
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy_server = Arc::new(proxy::ProxyServer::new());
 
     tauri::Builder::default()
         .manage(DanmakuState(Mutex::new(None)))
         .manage(ProxyState(proxy_server))
-        .invoke_handler(generate_handler![
+        .invoke_handler(tauri::generate_handler![
             get_stream_url,
             start_danmaku,
             search_anchor,
             start_proxy,
             set_stream_url,
-            fetch_room_info,
+            fetch_room_info,    // 添加这一行
+            fetch_live_list,
+            fetch_live_list_for_cate3,
+            fetch_categories,
+            fetch_three_cate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    Ok(())
 }
