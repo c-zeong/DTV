@@ -1,168 +1,183 @@
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use reqwest;
-use futures_util::StreamExt;
-use tauri::async_runtime::Mutex;
+use actix_web::{dev::ServerHandle, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+// use tokio::sync::Mutex as TokioMutex; // Not used here
+use std::sync::Mutex as StdMutex;
+use tauri::{AppHandle, State}; // Removed unused Manager and async_runtime
+use reqwest::Client; // Changed from awc::Client
+use futures_util::TryStreamExt; // For map_err on the stream
+use bytes::Bytes; // Ensure Bytes is in scope for the stream
 
-pub struct ProxyServer {
-    client: reqwest::Client,
-    port: u16,
-    current_stream: Arc<Mutex<Option<String>>>,
+// Changed path: StreamUrlStore is now at the crate root (main.rs)
+use crate::StreamUrlStore; 
+
+// Define a struct to hold the server handle in a Tauri managed state
+#[derive(Default)]
+pub struct ProxyServerHandle(pub StdMutex<Option<ServerHandle>>);
+
+async fn find_free_port() -> u16 {
+    // Using a fixed port as requested by the user for easier debugging
+    34719
 }
 
-impl ProxyServer {
-    pub fn new() -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-            
-        ProxyServer {
-            client,
-            port: 7433,
-            current_stream: Arc::new(Mutex::new(None)),
+// Your actual proxy logic - this is a simplified placeholder
+async fn flv_proxy_handler(
+    _req: HttpRequest,
+    stream_url_store: web::Data<StreamUrlStore>,
+    client: web::Data<Client>, // Changed to reqwest::Client
+) -> impl Responder {
+    let url = stream_url_store.url.lock().unwrap().clone();
+    if url.is_empty() {
+        return HttpResponse::NotFound().body("Stream URL is not set or empty.");
+    }
+
+    println!("[Rust/proxy.rs handler] Attempting to proxy FLV stream from (using reqwest): {}", url);
+
+    match client.get(&url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .send()
+        .await
+    {
+        Ok(upstream_response) => {
+            if upstream_response.status().is_success() {
+                println!(
+                    "[Rust/proxy.rs handler] Successfully connected to upstream with reqwest. Status: {}. Streaming...",
+                    upstream_response.status()
+                );
+
+                let mut response_builder = HttpResponse::Ok();
+                response_builder.content_type("video/x-flv");
+
+                // Forward relevant headers from upstream_response if necessary
+                // For example, some Douyu streams might send Content-Length,
+                // but for live streams, it's often chunked.
+                // if let Some(content_length) = upstream_response.headers().get(reqwest::header::CONTENT_LENGTH) {
+                //    response_builder.insert_header((actix_web::http::header::CONTENT_LENGTH, content_length.as_bytes()));
+                // }
+                // response_builder.no_chunking(true); // Experiment if needed
+
+                // Convert reqwest's byte stream to a type Actix can stream
+                let byte_stream = upstream_response.bytes_stream().map_err(|e| {
+                    eprintln!("[Rust/proxy.rs handler] Error reading bytes from upstream: {}", e);
+                    actix_web::error::ErrorInternalServerError(format!("Upstream stream error: {}", e))
+                });
+                
+                response_builder.streaming(byte_stream)
+
+            } else {
+                let status = upstream_response.status();
+                let error_text = upstream_response.text().await.unwrap_or_else(|e| {
+                    format!("Failed to read error body from upstream: {}", e)
+                });
+                eprintln!(
+                    "[Rust/proxy.rs handler] Upstream request to {} failed with status: {}. Body: {}",
+                    url,
+                    status,
+                    error_text
+                );
+                HttpResponse::build(status).body(format!(
+                    "Error fetching FLV stream from upstream (reqwest): {}. Status: {}. Details: {}",
+                    url,
+                    status,
+                    error_text
+                ))
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "[Rust/proxy.rs handler] Failed to send request to upstream {} with reqwest: {}",
+                url,
+                e
+            );
+            HttpResponse::InternalServerError().body(format!(
+                "Error connecting to upstream FLV stream {} with reqwest: {}",
+                url,
+                e
+            ))
         }
     }
+}
 
-    pub async fn set_stream(&self, url: String) {
-        let mut stream = self.current_stream.lock().await;
-        *stream = Some(url);
+
+#[tauri::command]
+pub async fn start_proxy(
+    _app_handle: AppHandle, 
+    server_handle_state: State<'_, ProxyServerHandle>,
+    stream_url_store: State<'_, StreamUrlStore>,
+) -> Result<String, String> {
+    let port = find_free_port().await;
+    let current_stream_url = stream_url_store.url.lock().unwrap().clone();
+
+    if current_stream_url.is_empty() {
+        return Err("Stream URL is not set in store. Cannot start proxy.".to_string());
+    }
+    
+    // stream_url_data_for_actix can be created once and cloned, as StreamUrlStore is Arc based and Send + Sync
+    let stream_url_data_for_actix = web::Data::new(stream_url_store.inner().clone());
+    // REMOVED: let awc_client_for_actix = web::Data::new(Client::default());
+
+    // Ensure MutexGuard is dropped before .await
+    let existing_handle_to_stop = {
+        server_handle_state.0.lock().unwrap().take()
+    };
+    if let Some(existing_handle) = existing_handle_to_stop {
+        println!("[Rust/proxy.rs] Found existing proxy server handle in start_proxy, stopping it first.");
+        existing_handle.stop(false).await; 
     }
 
-    pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let addr = format!("127.0.0.1:{}", self.port);
-        let listener = TcpListener::bind(&addr).await?;
-        println!("Proxy server listening on http://{}/live.flv", addr);
+    println!("[Rust/proxy.rs] Starting proxy server for URL: {} on port {}", current_stream_url, port);
 
-        loop {
-            let (mut stream, addr) = listener.accept().await?;
-            println!("New connection from: {}", addr);
-            let client = self.client.clone();
-            let current_stream = self.current_stream.clone();
-
-            tokio::spawn(async move {
-                let mut buffer = [0; 1024];
-                match stream.read(&mut buffer).await {
-                    Ok(n) => {
-                        let request = String::from_utf8_lossy(&buffer[..n]);
-                        if !request.contains("GET /live.flv") {
-                            let not_found = "HTTP/1.1 404 Not Found\r\n\r\nNot Found";
-                            let _ = stream.write_all(not_found.as_bytes()).await;
-                            return;
-                        }
-
-                        let stream_url = {
-                            let guard = current_stream.lock().await;
-                            match &*guard {
-                                Some(url) => url.clone(),
-                                None => {
-                                    let err = "HTTP/1.1 503 Service Unavailable\r\n\r\nNo stream URL set";
-                                    let _ = stream.write_all(err.as_bytes()).await;
-                                    return;
-                                }
-                            }
-                        };
-
-                        println!("Fetching stream from: {}", stream_url);
-                        match client.get(&stream_url)
-                            .header("Referer", "https://www.example.com")
-                            .header("Origin", "https://www.example.com")
-                            .header("Accept", "*/*")
-                            .header("Accept-Encoding", "identity")
-                            .send()
-                            .await 
-                        {
-                            Ok(response) => {
-                                println!("Source response status: {}", response.status());
-
-                                let response_header = "\
-                                    HTTP/1.1 200 OK\r\n\
-                                    Content-Type: video/x-flv\r\n\
-                                    Connection: keep-alive\r\n\
-                                    Access-Control-Allow-Origin: *\r\n\
-                                    Access-Control-Allow-Methods: GET, OPTIONS\r\n\
-                                    Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept\r\n\
-                                    Cache-Control: no-cache\r\n\
-                                    \r\n";
-
-                                if let Err(e) = stream.write_all(response_header.as_bytes()).await {
-                                    eprintln!("Failed to write headers: {}", e);
-                                    return;
-                                }
-
-                                let mut first_bytes = Vec::new();
-                                let mut stream_bytes = response.bytes_stream();
-                                if let Some(Ok(chunk)) = stream_bytes.next().await {
-                                    first_bytes.extend_from_slice(&chunk);
-                                }
-
-                                if first_bytes.len() >= 3 && &first_bytes[0..3] != b"FLV" {
-                                    println!("Adding FLV header");
-                                    if let Err(e) = stream.write_all(b"FLV\x01\x05\x00\x00\x00\x09\x00\x00\x00\x00").await {
-                                        eprintln!("Failed to write FLV header: {}", e);
-                                        return;
-                                    }
-                                }
-
-                                if let Err(e) = stream.write_all(&first_bytes).await {
-                                    eprintln!("Failed to write first bytes: {}", e);
-                                    return;
-                                }
-
-                                if let Err(e) = stream.flush().await {
-                                    eprintln!("Failed to flush: {}", e);
-                                    return;
-                                }
-
-                                let mut total_bytes = first_bytes.len();
-                                let start_time = std::time::Instant::now();
-                                
-                                while let Some(chunk_result) = stream_bytes.next().await {
-                                    match chunk_result {
-                                        Ok(chunk) => {
-                                            total_bytes += chunk.len();
-                                            match stream.write_all(&chunk).await {
-                                                Ok(_) => {
-                                                    if let Err(e) = stream.flush().await {
-                                                        eprintln!("Error flushing: {}", e);
-                                                        break;
-                                                    }
-                                                    if total_bytes % (1024 * 1024) == 0 {
-                                                        let elapsed = start_time.elapsed().as_secs_f64();
-                                                        let rate = total_bytes as f64 / elapsed / 1024.0;
-                                                        println!("Transfer rate: {:.2} KB/s", rate);
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                                                        println!("Client disconnected");
-                                                    } else {
-                                                        eprintln!("Error writing: {}", e);
-                                                    }
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        Err(e) => {
-                                            eprintln!("Error reading from source: {}", e);
-                                            break;
-                                        }
-                                    }
-                                }
-                                println!("Stream ended. Total bytes: {}", total_bytes);
-                            }
-                            Err(e) => eprintln!("Error connecting to stream: {}", e),
-                        }
-                    }
-                    Err(e) => eprintln!("Error reading request: {}", e),
-                }
-            });
+    let server = match HttpServer::new(move || {
+        let app_data_stream_url = stream_url_data_for_actix.clone();
+        // Create reqwest::Client inside the closure for each worker thread
+        let app_data_reqwest_client = web::Data::new(Client::new()); // Changed to reqwest::Client
+        App::new()
+            .app_data(app_data_stream_url)
+            .app_data(app_data_reqwest_client) // Provide reqwest client
+            .wrap(actix_cors::Cors::permissive())
+            .route("/live.flv", web::get().to(flv_proxy_handler))
+    })
+    .bind(("127.0.0.1", port)) {
+        Ok(srv) => srv,
+        Err(e) => {
+            let err_msg = format!("[Rust/proxy.rs] Failed to bind server to port {}: {}", port, e);
+            eprintln!("{}", err_msg);
+            return Err(err_msg);
         }
     }
+    .run();
 
-    pub fn get_proxy_url(&self) -> String {
-        format!("http://127.0.0.1:{}/live.flv", self.port)
+    let server_handle_for_state = server.handle();
+    *server_handle_state.0.lock().unwrap() = Some(server_handle_for_state);
+
+    // Use tauri::async_runtime::spawn directly
+    tauri::async_runtime::spawn(async move {
+        println!("[Rust/proxy.rs] Proxy server task started on port {}.", port);
+        if let Err(e) = server.await {
+            eprintln!("[Rust/proxy.rs] Proxy server run error: {}", e);
+        } else {
+            println!("[Rust/proxy.rs] Proxy server on port {} shut down.", port);
+        }
+    });
+    
+    let proxy_url = format!("http://127.0.0.1:{}/live.flv", port);
+    println!("[Rust/proxy.rs] Proxy server should be accessible at {}", proxy_url);
+    Ok(proxy_url)
+}
+
+#[tauri::command]
+pub async fn stop_proxy(
+    server_handle_state: State<'_, ProxyServerHandle>
+) -> Result<(), String> {
+    // Ensure MutexGuard is dropped before .await
+    let handle_to_stop = {
+        server_handle_state.0.lock().unwrap().take()
+    }; 
+
+    if let Some(handle) = handle_to_stop {
+        println!("[Rust/proxy.rs] Attempting to stop proxy server via command...");
+        handle.stop(true).await; 
+        println!("[Rust/proxy.rs] Proxy server stop command executed.");
+    } else {
+        println!("[Rust/proxy.rs] stop_proxy command: No proxy server was running or handle already taken.");
     }
+    Ok(())
 } 

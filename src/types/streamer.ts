@@ -23,5 +23,7 @@ export interface RoomInfo {
     show_status: string;
     videoLoop: string;
     avatar_mid: string;
+    cate_name?: string;
+    online_num?: string;
   }
 }

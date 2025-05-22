@@ -168,7 +168,6 @@ const animateHeightChange = (targetExpandedState: boolean) => {
   const targetHeightValue = getCurrentTargetHeight(targetExpandedState);
 
   // Temporarily set overflow to hidden during animation, regardless of target state
-  const originalOverflow = content.style.overflowY;
   content.style.overflowY = 'hidden';
 
   content.style.height = `${targetHeightValue}px`;

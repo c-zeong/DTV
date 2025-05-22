@@ -180,7 +180,7 @@ const goToPlayer = (roomId: string) => {
   flex-grow: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px; 
+  padding: 16px 24px;
   position: relative; 
   scrollbar-width: thin; 
   scrollbar-color: #444 #18181b;

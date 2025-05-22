@@ -47,8 +47,8 @@ struct JsonCate1Item {
     id: i32,
     #[serde(rename = "cate1Name")]
     name: String,
-    #[serde(rename = "shortName")]
-    short_name: String,
+    // #[serde(rename = "shortName")] // Removed as unused
+    // short_name: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]

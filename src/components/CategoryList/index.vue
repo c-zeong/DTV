@@ -19,7 +19,7 @@
         :selected-cate2-id="selectedCate2Id"
         :is-expanded="isExpanded"
         :has-more-rows="hasMoreRows"
-        @select="handleCate2Click"
+        @select="handleCate2SelectAndCollapse"
         @toggle-expand="toggleExpand"
         @height-changed="handleCate2HeightChanged"
       />
@@ -48,7 +48,7 @@ import Cate3List from './components/Cate3List.vue'
 import { useCategories } from './composables/useCategories'
 import { useSelection } from './composables/useSelection'
 import { useExpand } from './composables/useExpand'
-import type { CategorySelectedEvent } from './types'
+import type { CategorySelectedEvent, Category2 } from './types'
 
 const emit = defineEmits<{
   (e: 'category-selected', category: CategorySelectedEvent): void
@@ -61,12 +61,13 @@ const categoryListRootRef = ref<HTMLElement | null>(null)
 const hasError = ref(false)
 const isLoading = ref(true)
 
+// Correct order of composable calls
 const {
   selectedCate1Id,
   selectedCate2Id,
   selectedCate3Id,
   selectCate1,
-  handleCate2Click,
+  handleCate2Click: originalHandleCate2Click,
   handleCate3Click,
   resetSelection
 } = useSelection(emit)
@@ -85,8 +86,15 @@ const {
   isExpanded,
   hasMoreRows,
   toggleExpand,
-  resetExpand
 } = useExpand(sortedCate2List)
+
+// New wrapper function for C2 click to handle auto-collapse
+const handleCate2SelectAndCollapse = (cate2: Category2) => {
+  originalHandleCate2Click(cate2)
+  if (isExpanded.value) {
+    toggleExpand()
+  }
+};
 
 // 监听isExpanded变化
 watch(isExpanded, (newVal) => {
@@ -140,7 +148,7 @@ onMounted(() => {
     }
     
     if (sortedCate2List.value.length > 0 && selectedCate2Id.value === null) {
-      handleCate2Click(sortedCate2List.value[0])
+      handleCate2SelectAndCollapse(sortedCate2List.value[0])
     }
   }, 1000)
   
@@ -216,7 +224,7 @@ watch(sortedCate2List, (newList) => {
   if (newList.length > 0 && selectedCate2Id.value === null) {
     nextTick(() => {
       console.log('CategoryList: 自动选择第一个二级分类:', newList[0].cate2Id)
-      handleCate2Click(newList[0])
+      handleCate2SelectAndCollapse(newList[0])
     })
   }
 })

@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref } from 'vue'
 import type { Category2, Category3, CategorySelectedEvent } from '../types'
 
 export function useSelection(emit: (event: 'category-selected', ...args: any[]) => void) {

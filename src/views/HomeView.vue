@@ -30,6 +30,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+
+// Added for KeepAlive include by name
+defineOptions({
+  name: 'HomeView'
+})
+
 import CategoryList from '../components/CategoryList/index.vue'
 import LiveList from '../components/LiveList/index.vue'
 import { invoke } from '@tauri-apps/api/core'
