@@ -1,14 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import PlayerView from '../views/PlayerView.vue'
+import DouyuHomeView from '../pages/DouyuHomeView.vue' 
+import PlayerView from '../pages/PlayerView.vue' 
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: HomeView
+      name: 'DouyuHome',
+      component: DouyuHomeView
     },
     {
       path: '/player/:roomId',
@@ -16,6 +16,12 @@ const router = createRouter({
       component: PlayerView,
       props: true
     }
+    // Add other routes, e.g., for a generic home, settings, etc.
+    // {
+    //   path: '/settings',
+    //   name: 'settings',
+    //   // component: () => import('../pages/SettingsPage.vue') // Example for lazy loading
+    // }
   ]
 })
 

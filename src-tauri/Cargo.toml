@@ -38,6 +38,8 @@ actix-web = "4"
 actix-cors = "0.7"
 awc = { version = "3.4.0", features = ["tls-rustls-0_22"] }
 bytes = "1"
+log = "0.4"
+thiserror = "1.0"
 
 [features]
 # default = ["custom-protocol"] # Removed problematic line

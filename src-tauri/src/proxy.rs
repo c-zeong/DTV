@@ -4,7 +4,6 @@ use std::sync::Mutex as StdMutex;
 use tauri::{AppHandle, State}; // Removed unused Manager and async_runtime
 use reqwest::Client; // Changed from awc::Client
 use futures_util::TryStreamExt; // For map_err on the stream
-use bytes::Bytes; // Ensure Bytes is in scope for the stream
 
 // Changed path: StreamUrlStore is now at the crate root (main.rs)
 use crate::StreamUrlStore; 

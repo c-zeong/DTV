@@ -3,17 +3,19 @@
 
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use reqwest;
 
-mod douyu;
-mod danmaku;
+// mod douyu; // Removed old direct module
 mod proxy;
-mod api;
+mod platforms; // Added platforms module
+// use platforms::douyu; // No longer need this specific use if functions are directly available via platforms::douyu::* from main
 
 // Assuming API commands are correctly re-exported or defined in these modules
-use api::category::fetch_categories;
-use api::live_list::{fetch_live_list, fetch_live_list_for_cate3};
-use api::room_info::fetch_room_info;
-use api::three_cate::fetch_three_cate;
+use platforms::douyu::fetch_categories;
+use platforms::douyu::{fetch_live_list, fetch_live_list_for_cate3};
+use platforms::douyu::fetch_douyu_room_info;
+use platforms::douyu::fetch_three_cate;
+// get_stream_url and search_anchor will be directly available via platforms::douyu now
 
 #[derive(Default, Clone)]
 pub struct StreamUrlStore {
@@ -26,8 +28,8 @@ struct DanmakuState(Mutex<Option<mpsc::Sender<()>>>);
 // This is the command that should be used for getting stream URL if it interacts with StreamUrlStore
 #[tauri::command]
 async fn get_stream_url_cmd(room_id: String) -> Result<String, String> {
-    // Call the actual function to fetch the stream URL
-    douyu::get_stream_url(&room_id).await.map_err(|e| {
+    // Call the actual function to fetch the stream URL from the new location
+    platforms::douyu::get_stream_url(&room_id).await.map_err(|e| {
         eprintln!("[Rust Error] Failed to get stream URL for room {}: {}", room_id, e.to_string());
         format!("Failed to get stream URL: {}", e.to_string())
     })
@@ -38,9 +40,6 @@ async fn get_stream_url_cmd(room_id: String) -> Result<String, String> {
 async fn set_stream_url_cmd(url: String, state: tauri::State<'_, StreamUrlStore>) -> Result<(), String> {
     let mut current_url = state.url.lock().unwrap();
     *current_url = url;
-    // Also, we might need to inform the proxy if it's already running and needs to use the new URL.
-    // However, the current proxy model re-reads the URL when it starts.
-    // For a live update, a more complex mechanism (e.g., another state or a channel) would be needed.
     Ok(())
 }
 
@@ -58,7 +57,6 @@ async fn start_danmaku_listener(
     };
 
     if let Some(tx) = tx {
-        // Attempt to send shutdown signal, ignore error if receiver dropped
         let _ = tx.send(()).await;
     }
 
@@ -70,8 +68,7 @@ async fn start_danmaku_listener(
 
     let window_clone = window.clone();
     tokio::spawn(async move {
-        // Ensure DanmakuClient::new and .start() are correctly implemented
-        let mut client = danmaku::DanmakuClient::new(&room_id, window_clone); 
+        let mut client = platforms::douyu::danmu_start::DanmakuClient::new(&room_id, window_clone);
         tokio::select! {
             _ = client.start() => { println!("[Rust] Danmaku client for room {} finished or errored.", room_id); },
             _ = rx.recv() => { println!("[Rust] Danmaku client for room {} received shutdown signal.", room_id); },
@@ -85,33 +82,33 @@ async fn start_danmaku_listener(
 // search_anchor seems fine, assuming douyu::search_anchor is correct
 #[tauri::command]
 async fn search_anchor(keyword: String) -> Result<String, String> {
-    douyu::search_anchor(&keyword).await.map_err(|e| e.to_string())
+    platforms::douyu::perform_anchor_search(&keyword).await.map_err(|e| e.to_string())
 }
 
 // Main function corrected
-fn main() { // Removed async and Result return type
+fn main() { 
+    // Create a new HTTP client instance to be managed by Tauri
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        .build()
+        .expect("Failed to create reqwest client");
+
     tauri::Builder::default()
+        .manage(client) // Manage the reqwest client
         .manage(DanmakuState(Mutex::new(None)))
-        .manage(StreamUrlStore::default()) // Manage the StreamUrlStore
-        .manage(proxy::ProxyServerHandle::default()) // Manage the NEW proxy handle state
+        .manage(StreamUrlStore::default()) 
+        .manage(proxy::ProxyServerHandle::default()) 
         .invoke_handler(tauri::generate_handler![
-            // Commands from main.rs (or could be moved to douyu.rs if preferred)
             get_stream_url_cmd, 
             set_stream_url_cmd,
             search_anchor,
-            
-            // Danmaku command (renamed)
             start_danmaku_listener,
-            
-            // Proxy commands (from proxy.rs)
             proxy::start_proxy, 
             proxy::stop_proxy,
-            
-            // API commands (ensure these functions exist and are pub in their respective modules)
             fetch_categories, 
             fetch_live_list,
             fetch_live_list_for_cate3,
-            fetch_room_info,
+            fetch_douyu_room_info,
             fetch_three_cate
         ])
         .run(tauri::generate_context!())
