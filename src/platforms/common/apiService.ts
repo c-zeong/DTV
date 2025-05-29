@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'; // Added import for invoke
 import * as douyuApi from '../douyu/api';
 import * as douyuParsers from '../douyu/parsers'; // Import Douyu parsers
 import type { DouyuRoomInfo } from '../douyu/types'; // This might not be needed here anymore if parsing is fully encapsulated
+import { Platform } from './types'; // Import Platform enum
 import type { SupportedPlatform, StreamerDetails, StreamPlaybackDetails, CommonCategoryGroup, CommonPlatformCategory } from './types'; // Import SupportedPlatform, StreamerDetails, and StreamPlaybackDetails, and CommonCategoryGroup, and CommonPlatformCategory
 // Import other platform APIs and types here as they are added
 // e.g., import * as bilibiliApi from '../bilibili/api';
@@ -86,17 +87,24 @@ export async function fetchSubCategories(parentId: string): Promise<CommonPlatfo
 }
 
 // --- Stream Playback Details --- //
-export async function fetchStreamPlaybackDetails(roomId: string): Promise<StreamPlaybackDetails> {
-  switch (currentPlatform) {
-    case 'douyu':
+export async function fetchStreamPlaybackDetails(roomId: string, platform?: Platform): Promise<StreamPlaybackDetails> {
+  const targetPlatform = platform || currentPlatform; // Use provided platform or fallback to global
+  switch (targetPlatform) {
+    case Platform.DOUYU: // Use Platform enum
       const rawUrl = await douyuApi.fetchDouyuStreamUrlRaw(roomId);
       return douyuParsers.parseDouyuStreamDataToPlaybackDetails(roomId, rawUrl);
-    // case 'bilibili':
+    // case Platform.BILIBILI:
     //   const rawBiliStreamData = await bilibiliApi.fetchBilibiliStreamDataRaw(roomId);
     //   return bilibiliParsers.parseBilibiliStreamDataToPlaybackDetails(roomId, rawBiliStreamData);
+    case Platform.DOUYIN:
+      // Douyin stream details are fetched directly in DouyinPlayerView and passed as props.
+      // This function in MainPlayer for Douyin should ideally not be called if streamUrl is already provided.
+      // If it IS called for Douyin, it means something is wrong with the prop flow.
+      console.warn('[apiService] fetchStreamPlaybackDetails called for Douyin. This is unexpected if streamUrl is passed via props.');
+      return Promise.reject('Douyin stream details should be provided directly, not fetched via this common service.');
     default:
-      console.error(`Platform ${currentPlatform} not supported for fetchStreamPlaybackDetails`);
-      return Promise.reject(`Platform ${currentPlatform} not supported`);
+      console.error(`Platform ${targetPlatform} not supported for fetchStreamPlaybackDetails`);
+      return Promise.reject(`Platform ${targetPlatform} not supported`);
   }
 }
 

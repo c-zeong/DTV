@@ -294,60 +294,51 @@
   </style>
   
   <script setup lang="ts">
-  import { ref, watch, computed } from 'vue'
-  // import { invoke } from '@tauri-apps/api/core' // No longer directly used for fetch_douyu_room_info
-  // import type { RoomInfo } from '../../types/streamer' // Old type import
-  import { fetchRoomInfo } from '../../platforms/common/apiService'; // New service import
-  import type { StreamerDetails } from '../../platforms/common/types'; // Use the common StreamerDetails type
+  import { ref, computed, onMounted, watch, toRefs } from 'vue'
+  import { invoke } from '@tauri-apps/api/core'
+  import { Platform } from '../../platforms/common/types'
+  import type { StreamerDetails } from '../../platforms/common/types'
+  // import { parseDouyuRoomDataToStreamerDetails } from '../../platforms/douyu/parsers' // Ensure this is removed or commented out
   
-  const MAX_FETCH_ATTEMPTS = 3;
+  const MAX_FETCH_ATTEMPTS = 3
   
   const emit = defineEmits<{
-    (e: 'follow', streamer: {
-      roomId: string,
-      nickname: string,
-      roomTitle: string,
-      avatarUrl: string,
-      isLive: boolean,
-      categoryName?: string,
-      viewerCount?: number
-    }): void,
+    (e: 'follow', data: { id: string; platform: Platform; nickname: string; avatarUrl: string; roomTitle?: string }): void
     (e: 'unfollow', roomId: string): void
   }>()
   
   const props = defineProps<{
-    roomId: string,
-    isFollowed?: boolean
+    roomId: string
+    platform: Platform
+    isFollowed: boolean
+    title?: string | null
+    anchorName?: string | null
+    avatar?: string | null
   }>()
   
-  const roomTitle = ref('加载中...')
-  const nickname = ref('主播名称')
-  const isLive = ref(false)
-  const isReplay = ref(false)
-  const isFollowing = ref(props.isFollowed || false)
-  const avatarUrl = ref('')
+  const roomDetails = ref<StreamerDetails | null>(null)
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
   const showAvatarText = ref(false)
-  const categoryName = ref('')
-  const viewerCount = ref(0)
-  const platform = ref('douyu')
   
-  const isLoading = ref(false); // Added loading state
-  const fetchAttempts = ref(0); // Added fetch attempts counter
-  const permanentError = ref(false); // Indicates if max attempts reached
+  const roomTitle = computed(() => props.title ?? roomDetails.value?.roomTitle ?? '直播间标题加载中...')
+  const nickname = computed(() => props.anchorName ?? roomDetails.value?.nickname ?? '主播昵称加载中...')
+  const avatarUrl = computed(() => props.avatar ?? roomDetails.value?.avatarUrl ?? null)
+  const viewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
+  const isLive = computed(() => roomDetails.value?.isLive ?? false)
+  const categoryName = computed(() => roomDetails.value?.categoryName ?? 'N/A')
+  
+  const isFollowing = computed(() => props.isFollowed)
   
   const statusClass = computed(() => {
     if (isLive.value) return 'live'
-    if (isReplay.value) return 'replay'
     return 'offline'
   })
   
   const getStatusText = computed(() => {
-    if (permanentError.value) return '信息加载失败';
-    if (isLive.value) return '直播中';
-    if (isReplay.value) return '轮播中';
-    if (isLoading.value && fetchAttempts.value === 0) return '加载中...';
-    if (isLoading.value) return '尝试重连...';
-    return '未开播';
+    if (error.value) return '信息加载失败'
+    if (isLive.value) return '直播中'
+    return '未开播'
   })
   
   const formattedViewerCount = computed(() => {
@@ -357,130 +348,98 @@
     return viewerCount.value.toString()
   })
   
-  const resetStateForNewRoom = () => {
-    roomTitle.value = '加载中...'; 
-    nickname.value = '主播名称'; 
-    isLive.value = false; 
-    isReplay.value = false;
-    avatarUrl.value = ''; 
-    categoryName.value = ''; 
-    viewerCount.value = 0; 
-    showAvatarText.value = false;
-    fetchAttempts.value = 0;
-    isLoading.value = false;
-    permanentError.value = false;
-    platform.value = 'douyu';
-  };
-  
-  const fetchRoomData = async () => {
-    if (!props.roomId) {
-      console.warn('StreamerInfo: roomId is not provided.');
-      resetStateForNewRoom();
-      roomTitle.value = ''; nickname.value = 'N/A';
-      return;
+  const fetchRoomDetails = async () => {
+    if (props.platform === Platform.DOUYIN && props.title && props.anchorName && props.avatar) {
+      console.log('[StreamerInfo] Douyin platform: Using details from props.')
+      if (!avatarUrl.value) showAvatarText.value = true
+      isLoading.value = false
+      return
     }
-  
-    if (isLoading.value && fetchAttempts.value > 0) {
-        console.log('StreamerInfo: Already fetching room info for ' + props.roomId);
-        return;
-    }
-  
-    if (fetchAttempts.value >= MAX_FETCH_ATTEMPTS) {
-      console.error(`StreamerInfo: Max fetch attempts (${MAX_FETCH_ATTEMPTS}) reached for room ${props.roomId}.`);
-      roomTitle.value = '信息加载失败'; 
-      nickname.value = '请检查网络或稍后再试';
-      permanentError.value = true;
-      isLoading.value = false;
-      return;
-    }
-  
-    isLoading.value = true;
-    permanentError.value = false;
-    console.log(`StreamerInfo: Attempt ${fetchAttempts.value + 1} to fetch room info for ${props.roomId}`);
-  
+    console.log(`[StreamerInfo] Fetching details for ${props.platform}/${props.roomId}`)
+    isLoading.value = true
+    error.value = null
     try {
-      // const data = await invoke<RoomInfo>('fetch_douyu_room_info', { roomId: props.roomId }) // Old call
-      const streamerData: StreamerDetails = await fetchRoomInfo(props.roomId); // New call, expects StreamerDetails
-      console.log('StreamerInfo fetched StreamerDetails:', streamerData);
+      const rawDetails = await invoke<any>('fetch_douyu_room_info', { roomId: props.roomId });
       
-      if (!streamerData || !streamerData.roomId) {
-        console.error('StreamerInfo: Invalid StreamerDetails received:', streamerData);
-        throw new Error('Invalid StreamerDetails structure received'); 
-      }
-  
-      roomTitle.value = streamerData.roomTitle || '未知房间名'
-      nickname.value = streamerData.nickname || '未知主播'
-      isLive.value = streamerData.isLive
-      isReplay.value = streamerData.isReplay || false
-      avatarUrl.value = streamerData.avatarUrl || ''
-      categoryName.value = streamerData.categoryName || '游戏分区'
-      viewerCount.value = streamerData.viewerCount || 0
-      platform.value = streamerData.platform || 'douyu'
-  
-      if (!avatarUrl.value) {
-          console.log('StreamerInfo: Avatar URL is empty, attempting fallback.');
-          showAvatarText.value = true;
+      if (props.platform === Platform.DOUYU) {
+        const roomData = rawDetails.data?.room ?? rawDetails.room ?? rawDetails.data ?? rawDetails;
+
+        if (!roomData || Object.keys(roomData).length === 0) {
+          console.error('[StreamerInfo] Douyu rawDetails or roomData is empty/undefined:', rawDetails);
+          throw new Error('Received empty room data from API');
+        }
+        
+        const showStatus = Number(roomData.show_status);
+        const videoLoop = Number(roomData.videoLoop ?? roomData.video_loop ?? 0);
+        const isReallyLive = showStatus === 1 && videoLoop !== 1;
+
+        roomDetails.value = {
+          roomId: props.roomId,
+          platform: 'douyu', // Ensure string literal 'douyu' is used
+          nickname: roomData.nickname || 'N/A',
+          roomTitle: roomData.room_name || roomData.roomName || 'N/A',
+          avatarUrl: roomData.avatar_mid || roomData.avatar || roomData.owner_avatar || null,
+          isLive: isReallyLive,
+          viewerCount: Number(roomData.hn || roomData.online_num || roomData.onlineNum || 0),
+          categoryName: roomData.cate2_name || roomData.cate_name || roomData.game_name || 'N/A',
+        };
+      } else if (props.platform === Platform.DOUYIN) {
+        // Placeholder for Douyin direct prop usage or future Douyin-specific API call
+        // For now, if details come from props (handled at the start of function), this block might not be hit
+        // If a Douyin specific API call is made here in the future, map it similarly.
+        // Example if rawDetails were from a Douyin API:
+        // roomDetails.value = {
+        //   roomId: props.roomId,
+        //   platform: 'douyin', 
+        //   nickname: rawDetails.nickname || 'N/A',
+        //   // ... other Douyin specific fields
+        // };
+        // For now, we assume Douyin details are passed via props and handled earlier.
+        // If fetch_douyu_room_info is mistakenly called for Douyin, it would be an error.
+        // The initial check `props.platform === Platform.DOUYIN && props.title ...` handles prop-based data for Douyin.
+        // If execution reaches here for Douyin, it implies an API call was made, which is not currently the case
+        // for Douyin in this function (it uses props). If `fetch_douyu_room_info` *could* return Douyin data,
+        // we'd need a specific parser here.
+        console.warn('[StreamerInfo] Reached Douyin processing block after API call. Ensure this is intended and data is Douyin-specific.');
+        // Fallback or specific parsing for Douyin if rawDetails came from an API for Douyin
+        roomDetails.value = rawDetails as StreamerDetails; // This is likely incorrect if rawDetails structure is unknown for Douyin API
       } else {
-          showAvatarText.value = false;
+        console.warn(`[StreamerInfo] fetch_douyu_room_info was called for an unhandled platform: ${props.platform}. Ensure this is intended.`);
+        roomDetails.value = rawDetails as StreamerDetails; 
       }
-      fetchAttempts.value = 0;
-    } catch (error) {
-      console.error(`StreamerInfo: Error on attempt ${fetchAttempts.value + 1} for room ${props.roomId}:`, error);
-      fetchAttempts.value++;
-      if (fetchAttempts.value < MAX_FETCH_ATTEMPTS) {
-        // Optionally, implement a small delay before retrying
-        // setTimeout(fetchRoomData, 1000 * fetchAttempts.value); // Example: 1s, 2s delay
-        // For now, relies on watch to re-trigger or direct call if needed.
-        // If watch is not re-triggering on error, a direct re-call might be needed here after a delay.
-      } else {
-          console.error(`StreamerInfo: All ${MAX_FETCH_ATTEMPTS} attempts failed for room ${props.roomId}.`);
-          roomTitle.value = '信息加载失败'; 
-          nickname.value = '网络错误或服务不可达';
-          permanentError.value = true;
-      }
+
+      if (!avatarUrl.value) showAvatarText.value = true
+    } catch (e: any) {
+      console.error(`[StreamerInfo] Error fetching room details for ${props.roomId}:`, e)
+      error.value = e.message || 'Failed to load streamer details'
+      showAvatarText.value = true
     } finally {
-      isLoading.value = false;
+      isLoading.value = false
+    }
+  }
+  
+  const toggleFollow = () => {
+    if (isFollowing.value) {
+      emit('unfollow', props.roomId)
+    } else {
+      const followData = {
+        id: props.roomId,
+        platform: props.platform,
+        nickname: nickname.value === '主播昵称加载中...' ? props.roomId : nickname.value,
+        avatarUrl: avatarUrl.value ?? '',
+        roomTitle: roomTitle.value === '直播间标题加载中...' ? undefined : roomTitle.value,
+      }
+      emit('follow', followData)
     }
   }
   
   const handleAvatarError = () => {
-    console.warn('StreamerInfo: Failed to load avatar: ' + avatarUrl.value);
-    showAvatarText.value = true 
-    avatarUrl.value = '' 
+    console.warn('[StreamerInfo] Failed to load avatar: ' + avatarUrl.value)
+    showAvatarText.value = true
   }
   
-  const toggleFollow = () => {
-    isFollowing.value = !isFollowing.value
-    if (isFollowing.value) {
-      emit('follow', {
-        roomId: props.roomId,
-        nickname: nickname.value,
-        roomTitle: roomTitle.value,
-        avatarUrl: avatarUrl.value,
-        isLive: isLive.value,
-        categoryName: categoryName.value,
-        viewerCount: viewerCount.value
-      })
-    } else {
-      emit('unfollow', props.roomId)
-    }
-  }
-  
-  watch(() => props.roomId, (newId, oldId) => {
-    console.log('StreamerInfo: roomId changed from ' + (oldId || 'null') + ' to ' + (newId || 'null'));
-    if (newId) {
-      resetStateForNewRoom(); // Reset states for the new room before fetching
-      fetchRoomData(); // Call the modified fetch function
-    } else {
-      resetStateForNewRoom(); // Clear all info if roomId becomes null
-      roomTitle.value = ''; 
-      nickname.value = 'N/A';
-      isFollowing.value = false;
-    }
-  }, { immediate: true })
-  
-  watch(() => props.isFollowed, (newValue) => {
-    isFollowing.value = newValue || false;
-  });
+  onMounted(() => {
+    fetchRoomDetails()
+  })
   
   </script>

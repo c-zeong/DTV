@@ -127,7 +127,7 @@ watch(() => ({ type: props.categoryType, id: props.categoryId }), (newCategory, 
 
 const goToPlayer = (roomId: string) => {
   if (!roomId) return;
-  router.push({ name: 'player', params: { roomId } });
+  router.push({ name: 'douyuPlayer', params: { roomId } });
 }
 
 </script>

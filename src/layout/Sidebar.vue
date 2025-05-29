@@ -34,7 +34,7 @@ const router = useRouter();
 
 const navItems = ref([
   { name: '斗鱼直播', path: '/' },
-  { name: '抖音直播', path: '/settings' },
+  { name: '抖音直播', path: '/douyin' },
 ]);
 
 const props = withDefaults(defineProps<{

@@ -15,6 +15,9 @@ use platforms::douyu::fetch_categories;
 use platforms::douyu::{fetch_live_list, fetch_live_list_for_cate3};
 use platforms::douyu::fetch_douyu_room_info;
 use platforms::douyu::fetch_three_cate;
+use platforms::douyin::generate_douyin_ms_token;
+use platforms::douyin::fetch_douyin_partition_rooms;
+use platforms::douyin::get_douyin_live_stream_url;
 // get_stream_url and search_anchor will be directly available via platforms::douyu now
 
 #[derive(Default, Clone)]
@@ -109,7 +112,10 @@ fn main() {
             fetch_live_list,
             fetch_live_list_for_cate3,
             fetch_douyu_room_info,
-            fetch_three_cate
+            fetch_three_cate,
+            generate_douyin_ms_token,
+            fetch_douyin_partition_rooms,
+            get_douyin_live_stream_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

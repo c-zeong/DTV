@@ -22,8 +22,13 @@
         </div>
         <div v-else class="player-container">
           <StreamerInfo
-            :roomId="roomId"
-            :isFollowed="isFollowed"
+            v-if="props.roomId"
+            :room-id="props.roomId"
+            :platform="props.platform"
+            :title="props.title"
+            :anchor-name="props.anchorName"
+            :avatar="props.avatar"
+            :is-followed="props.isFollowed"
             @follow="$emit('follow', $event)"
             @unfollow="$emit('unfollow', $event)"
             class="streamer-info"
@@ -54,6 +59,7 @@ import { listen } from '@tauri-apps/api/event';
 import StreamerInfo from '../StreamerInfo/index.vue';
 import DanmuList from '../DanmuList/index.vue';
 import { fetchStreamPlaybackDetails } from '../../platforms/common/apiService';
+import { Platform } from '../../platforms/common/types';
 import type { StreamPlaybackDetails } from '../../platforms/common/types';
 
 interface DanmakuMessage {
@@ -69,7 +75,12 @@ interface DanmakuMessage {
 
 const props = defineProps<{
   roomId: string | null;
+  platform: Platform;
   isFollowed?: boolean;
+  streamUrl?: string | null;
+  title?: string | null;
+  anchorName?: string | null;
+  avatar?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -114,7 +125,7 @@ const destroyPlayer = async () => {
 };
 
 const initPlayer = async () => {
-  console.log('[MainPlayer] initPlayer called for roomId:', props.roomId);
+  console.log(`[MainPlayer] initPlayer called for platform: ${props.platform}, roomId: ${props.roomId}`);
 
   if (art.value) {
     console.log('[MainPlayer] Destroying existing ArtPlayer instance before new init.');
@@ -123,11 +134,15 @@ const initPlayer = async () => {
 
   if (!props.roomId) {
     console.warn('[MainPlayer] initPlayer: No roomId provided.');
+    streamError.value = '未提供房间ID。';
+    isLoadingStream.value = false;
     return;
   }
 
   if (!playerContainer.value) {
     console.error('[MainPlayer] initPlayer: playerContainer is null. Cannot init Artplayer.');
+    streamError.value = '播放器容器不存在。';
+    isLoadingStream.value = false;
     return;
   }
 
@@ -135,126 +150,22 @@ const initPlayer = async () => {
   streamError.value = null;
   streamFetchAttempts.value = 0;
 
-  let playbackDetails: StreamPlaybackDetails | null = null;
-
-  for (let attempt = 1; attempt <= MAX_STREAM_FETCH_ATTEMPTS; attempt++) {
-    try {
-      console.log(`[MainPlayer] Attempt ${attempt} to fetch stream playback details for room:`, props.roomId);
-      playbackDetails = await fetchStreamPlaybackDetails(props.roomId!);
-      if (playbackDetails && playbackDetails.primaryUrl) {
-        console.log('[MainPlayer] Stream playback details received:', playbackDetails);
-        streamError.value = null;
-        break;
-      } else {
-        console.warn('[MainPlayer] Received no/empty primary URL in playbackDetails:', playbackDetails);
-        streamError.value = '直播流地址获取为空，可能是主播未开播或平台接口问题。';
-      }
-    } catch (e: any) {
-      console.error(`[MainPlayer] Attempt ${attempt} failed to fetch stream playback details:`, e);
-      streamError.value = `获取直播流失败 (尝试 ${attempt}/${MAX_STREAM_FETCH_ATTEMPTS}): ${e.message || '未知错误'}`;
-      if (attempt === MAX_STREAM_FETCH_ATTEMPTS) {
-        isLoadingStream.value = false;
-        if (art.value) art.value.notice.show(streamError.value, 0);
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
-    }
-  }
-
-  isLoadingStream.value = false;
-
-  if (!playbackDetails || !playbackDetails.primaryUrl) {
-    console.error('[MainPlayer] Failed to get valid playback details after retries. Aborting player init.');
-    if (art.value && !streamError.value) {
-        art.value.notice.show('无法加载直播流，请稍后重试或检查房间号。', 0);
-    }
-    return;
-  }
-
-  try {
-    console.log('[MainPlayer] Ensuring any previous proxy is stopped before starting new one.');
-    await stopProxy();
-
-    const streamUrl = playbackDetails.primaryUrl;
-    console.log('[MainPlayer] Stream URL to be used:', streamUrl);
-
-    let streamType = 'flv';
-    if (playbackDetails.format) {
-        streamType = playbackDetails.format === 'm3u8' ? 'hls' : playbackDetails.format; 
-    } else if (streamUrl.includes('.m3u8')) {
-        streamType = 'hls';
-    } else if (streamUrl.includes('.mp4')) {
-        streamType = 'mp4';
-    }
-    if (streamType === 'm3u8') streamType = 'hls';
-
-    console.log(`[MainPlayer] Determined stream type: ${streamType}`);
-
-    await invoke('set_stream_url_cmd', { url: streamUrl });
-    const proxyUrl = await invoke<string>('start_proxy');
-    console.log('[MainPlayer] Proxy URL for ArtPlayer:', proxyUrl);
-
-    console.log('[MainPlayer] Creating new ArtPlayer instance.');
-    art.value = new Artplayer({
-      container: playerContainer.value,
-      url: proxyUrl,
+  const artPlayerOptionsBase = {
       isLive: true,
-      type: streamType,
       pip: true,
-      customType: {
-        ...(streamType === 'flv' ? {
-          flv: function(video: HTMLVideoElement, url: string) {
-            import('mpegts.js').then(mpegts => {
-              if (!mpegts.isSupported()) {
-                console.error('[MainPlayer] mpegts.js is not supported.');
-                if(art.value) art.value.notice.show('当前浏览器不支持播放该FLV格式的直播流。');
-                return;
-              }
-              console.log('[MainPlayer] Creating mpegts player for video element:', video);
-              
-              const player = mpegts.createPlayer({ 
-                type: 'flv', 
-                url: url,
-                isLive: true, 
-                hasAudio: true, 
-                hasVideo: true, 
-                cors: true,
-                fixAudioTimestampGap: false,
-                autoCleanupSourceBuffer: true,
-              }, { 
-                enableWorker: true,
-                lazyLoad: false, 
-                stashInitialSize: 1024,
-                liveBufferLatencyChasing: true,
-                liveSync: true
-              });
-              
-              player.attachMediaElement(video);
-              player.load();
-              
-              video.play().catch(e => {
-                  console.error('[MainPlayer] Auto-play error:', e);
-                  if(art.value) art.value.notice.show('自动播放失败，请尝试手动播放。');
-              });
-              
-              console.log('[MainPlayer] mpegts.js player loaded and attached.');
-              
-              player.on('error', (errorType, errorInfo) => {
-                console.error('[mpegts] Error:', errorType, errorInfo);
-                if(art.value) art.value.notice.show(`播放器遇到错误: ${errorType}`);
-              });
-              
-              player.on('media_info', (mediaInfo) => {
-                console.log('[mpegts] Media info:', mediaInfo);
-              });
-
-            }).catch(err => {
-              console.error('[MainPlayer] Error loading mpegts.js:', err);
-              if(art.value) art.value.notice.show('加载播放器核心组件失败。');
-            });
-          }
-        } : {}),
-      },
+      autoplay: true,
+      autoSize: false,
+      aspectRatio: false,
+      fullscreen: true,
+      fullscreenWeb: true,
+      miniProgressBar: true,
+      mutex: true,
+      backdrop: false,
+      playsInline: true,
+      autoPlayback: true,
+      theme: '#FB7299',
+      lang: 'zh-cn',
+      moreVideoAttr: { playsInline: true },
       plugins: [
         artplayerPluginDanmuku({
           danmuku: [],
@@ -269,114 +180,262 @@ const initPlayer = async () => {
         }),
       ],
       controls: [],
-      autoplay: true,
-      autoSize: false,
-      aspectRatio: false,
-      fullscreen: true,
-      fullscreenWeb: true,
-      miniProgressBar: true,
-      mutex: true,
-      backdrop: false,
-      playsInline: true,
-      autoPlayback: true,
-      theme: '#FB7299',
-      lang: 'zh-cn',
-      moreVideoAttr: { playsInline: true },
+  };
+
+  if (props.platform === Platform.DOUYIN) {
+    if (props.streamUrl) {
+      console.log('[MainPlayer] Initializing for Douyin with direct stream URL:', props.streamUrl);
+      let streamType = determineStreamType(props.streamUrl);
+      
+      try {
+        const playerUrl = props.streamUrl;
+        console.log('[MainPlayer] Douyin player URL (direct):', playerUrl);
+
+        art.value = new Artplayer({
+          ...artPlayerOptionsBase,
+          container: playerContainer.value!,
+          url: playerUrl, 
+          type: streamType,
+          customType: {
+            ...(streamType === 'flv' ? {
+              flv: function(video: HTMLVideoElement, url: string, art: Artplayer) {
+                import('mpegts.js').then(mpegts => {
+                  if (mpegts.default.isSupported()) {
+                    const player = mpegts.default.createPlayer({ type: 'flv', url: url, isLive: true, hasAudio: true, hasVideo: true, cors: true, fixAudioTimestampGap: false, autoCleanupSourceBuffer: true }, 
+                                                      { enableWorker: true, lazyLoad: false, stashInitialSize: 1024, liveBufferLatencyChasing: true, liveSync: true });
+                    player.attachMediaElement(video);
+                    player.load();
+                    video.play().catch(e => console.error('[MainPlayer] Douyin FLV Auto-play error:', e));
+                    player.on('error', (errorType, errorInfo) => {
+                      console.error('[mpegts Douyin] Error:', errorType, errorInfo);
+                      // if(art && art.notice) art.notice.show('抖音FLV播放错误');
+                    });
+                  } else {
+                     console.error('[MainPlayer] mpegts.js is not supported for Douyin.');
+                     // if(art && art.notice) art.notice.show('浏览器不支持抖音FLV');
+                  }
+                }).catch(err => {
+                  console.error('[MainPlayer] Error loading mpegts.js for Douyin:', err);
+                  // if(art && art.notice) art.notice.show('加载FLV组件失败');
+                });
+              }
+            } : {}),
+          },
+        });
+        art.value.on('play', () => console.log('[MainPlayer Douyin] Play event'));
+        art.value.on('error', (err: any) => {
+            console.error('[MainPlayer Douyin] ArtPlayer error:', err);
+            // if(art.value && art.value.notice) art.value.notice.show(err.message || '抖音播放核心错误');
+            streamError.value = `播放失败: ${err.message}`;
+        });
+      } catch (e: any) {
+        console.error('[MainPlayer] Error setting up Douyin player (direct or proxied):', e);
+        streamError.value = `设置抖音播放失败: ${e.message || '未知错误'}`;
+        // if (art.value && art.value.notice && streamError.value) art.value.notice.show(streamError.value ?? '设置抖音播放失败');
+      }
+    } else {
+      streamError.value = '抖音直播流地址未在props中提供。';
+      console.error(streamError.value); 
+    }
+    isLoadingStream.value = false;
+
+  } else if (props.platform === Platform.DOUYU) {
+    console.log('[MainPlayer] Initializing for Douyu, fetching details for roomId:', props.roomId);
+    let playbackDetails: StreamPlaybackDetails | null = null;
+    for (let attempt = 1; attempt <= MAX_STREAM_FETCH_ATTEMPTS; attempt++) {
+      try {
+        console.log(`[MainPlayer] Attempt ${attempt} to fetch Douyu stream playback details for room:`, props.roomId);
+        playbackDetails = await fetchStreamPlaybackDetails(props.roomId!, Platform.DOUYU);
+        if (playbackDetails && playbackDetails.primaryUrl) {
+          console.log('[MainPlayer] Douyu stream playback details received:', playbackDetails);
+          streamError.value = null;
+          break;
+        } else {
+          console.warn('[MainPlayer] Douyu: Received no/empty primary URL in playbackDetails:', playbackDetails);
+          streamError.value = '斗鱼直播流地址获取为空。';
+        }
+      } catch (e: any) {
+        console.error(`[MainPlayer] Douyu: Attempt ${attempt} failed to fetch stream playback details:`, e);
+        streamError.value = `获取斗鱼直播流失败 (尝试 ${attempt}/${MAX_STREAM_FETCH_ATTEMPTS}): ${e.message || '未知错误'}`;
+        if (attempt === MAX_STREAM_FETCH_ATTEMPTS) {
+          isLoadingStream.value = false;
+          // if (art.value && art.value.notice && streamError.value) art.value.notice.show(streamError.value ?? '获取斗鱼流失败', 0);
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+      }
+    }
+
+    if (!playbackDetails || !playbackDetails.primaryUrl) {
+      console.error('[MainPlayer] Douyu: Failed to get valid playback details. Aborting player init.');
+      // if (art.value && art.value.notice && !streamError.value) art.value.notice.show('无法加载斗鱼直播流', 0);
+      // else if (art.value && art.value.notice && streamError.value) art.value.notice.show(streamError.value ?? '无法加载斗鱼直播流', 0);
+      isLoadingStream.value = false;
+      return;
+    }
+
+    try {
+      await stopProxy(); 
+      const streamUrl = playbackDetails.primaryUrl;
+      let streamType = determineStreamType(streamUrl);
+      if (playbackDetails.format) {
+          streamType = playbackDetails.format === 'm3u8' ? 'hls' : playbackDetails.format as 'flv' | 'hls' | 'mp4'; 
+      }
+
+      await invoke('set_stream_url_cmd', { url: streamUrl });
+      const proxyUrl = await invoke<string>('start_proxy');
+      console.log('[MainPlayer] Douyu Proxy URL for ArtPlayer:', proxyUrl);
+
+      art.value = new Artplayer({
+        ...artPlayerOptionsBase,
+        container: playerContainer.value!,
+        url: proxyUrl,
+        type: streamType,
+        customType: {
+          ...(streamType === 'flv' ? {
+            flv: function(video: HTMLVideoElement, url: string, art: Artplayer) {
+              import('mpegts.js').then(mpegts => {
+                 if (mpegts.default.isSupported()) {
+                    const player = mpegts.default.createPlayer({ type: 'flv', url: url, isLive: true, hasAudio: true, hasVideo: true, cors: true, fixAudioTimestampGap: false, autoCleanupSourceBuffer: true }, 
+                                                      { enableWorker: true, lazyLoad: false, stashInitialSize: 1024, liveBufferLatencyChasing: true, liveSync: true });
+                    player.attachMediaElement(video);
+                    player.load();
+                    video.play().catch(e => console.error('[MainPlayer] Douyu FLV Auto-play error:', e));
+                    player.on('error', (errorType, errorInfo) => {
+                      console.error('[mpegts Douyu] Error:', errorType, errorInfo);
+                      // if(art && art.notice) art.notice.show('斗鱼FLV播放错误');
+                    });
+                  } else {
+                     console.error('[MainPlayer] mpegts.js is not supported for Douyu.');
+                     // if(art && art.notice) art.notice.show('浏览器不支持斗鱼FLV');
+                  }
+              }).catch(err => {
+                  console.error('[MainPlayer] Error loading mpegts.js for Douyu:', err);
+                  // if(art && art.notice) art.notice.show('加载FLV组件失败');
+              });
+            }
+          } : {}),
+        },
+      });
+      art.value.on('play', () => console.log('[MainPlayer Douyu] Play event'));
+      art.value.on('error', (err: any) => {
+        console.error('[MainPlayer Douyu] ArtPlayer error:', err);
+        // if(art.value && art.value.notice) art.value.notice.show(err.message || '斗鱼播放核心错误');
+        streamError.value = `播放失败: ${err.message}`;
+      });
+
+    } catch (e:any) {
+      console.error('[MainPlayer] Error setting up Douyu player:', e);
+      streamError.value = `设置斗鱼播放器失败: ${e.message || '未知错误'}`;
+      // if (art.value && art.value.notice && streamError.value) art.value.notice.show(streamError.value ?? '设置斗鱼播放失败');
+    }
+    isLoadingStream.value = false;
+
+  } else {
+    console.error('[MainPlayer] Unknown platform provided:', props.platform);
+    streamError.value = `不支持的平台: ${props.platform}`;
+    isLoadingStream.value = false;
+  }
+  
+  setupDanmakuListener();
+
+  if (art.value) {
+    // Common ArtPlayer event listeners for fullscreen
+    art.value.on('fullscreen', (status: boolean) => {
+      isFullScreen.value = status;
+      emit('fullscreen-change', status);
+      console.log(`[MainPlayer] Fullscreen status: ${status}`);
+    });
+    art.value.on('fullscreenWeb', (status: boolean) => {
+      isFullScreen.value = status;
+      emit('fullscreen-change', status);
+      console.log(`[MainPlayer] Web Fullscreen status: ${status}`);
     });
 
-    art.value.on('ready', () => console.log('[MainPlayer] ArtPlayer ready.'));
-    art.value.on('error', (error) => console.error('[MainPlayer] ArtPlayer error:', error));
-    
-    art.value.on('fullscreen', (isFullscreen) => {
-      console.log('[MainPlayer] Fullscreen changed:', isFullscreen);
-      isFullScreen.value = isFullscreen;
-      emit('fullscreen-change', isFullscreen);
-    });
-    
-    art.value.on('fullscreenWeb', (isFullscreenWeb) => {
-      console.log('[MainPlayer] Web Fullscreen changed:', isFullscreenWeb);
-      isFullScreen.value = isFullscreenWeb;
-      emit('fullscreen-change', isFullscreenWeb);
-    });
-    
-    await setupDanmakuListener();
-
-  } catch (e) {
-    console.error('[MainPlayer] initPlayer failed:', e);
-    await stopProxy();
+    if (!art.value.plugins.artplayerPluginDanmuku) {
+        console.warn("[MainPlayer] Danmaku plugin not initialized on artplayer instance. Re-checking plugins array.");
+    }
   }
 };
 
 const setupDanmakuListener = async () => {
   if (unlistenDanmaku) {
-    console.log('[MainPlayer] Cleaning up previous ArtPlayer danmaku listener.');
+    console.log('[MainPlayer] Clearing previous danmaku listener.');
     unlistenDanmaku();
     unlistenDanmaku = null;
   }
-  
-  if (!props.roomId) {
-    console.log('[MainPlayer] setupDanmakuListener: No room ID.');
+
+  if (!props.roomId || !art.value || !art.value.plugins.artplayerPluginDanmuku) {
+    console.log('[MainPlayer] Conditions not met for danmaku listener setup (no roomId, art, or danmaku plugin).', { hasRoomId: !!props.roomId, hasArt: !!art.value, hasPlugin: !!(art.value && art.value.plugins.artplayerPluginDanmuku) });
     return;
   }
-  if (!art.value || !art.value.plugins || !art.value.plugins.artplayerPluginDanmuku) {
-    console.warn('[MainPlayer] setupDanmakuListener: ArtPlayer or danmaku plugin not available.');
-    await new Promise(resolve => setTimeout(resolve, 200));
-    if (!art.value || !art.value.plugins || !art.value.plugins.artplayerPluginDanmuku) {
-       console.error('[MainPlayer] setupDanmakuListener: ArtPlayer still not ready after delay. Aborting listener setup.');
-       return;
-    }
-  }
 
-  console.log('[MainPlayer] Setting up ArtPlayer danmaku listener for event "danmaku".');
-  try {
-    unlistenDanmaku = await listen<DanmakuMessage>('danmaku', (event) => {
-      if (art.value && art.value.plugins && art.value.plugins.artplayerPluginDanmuku) {
-        const danmukuPlugin = art.value.plugins.artplayerPluginDanmuku;
-        let danmakuColor = '#FFFFFF';
-        if (event.payload.color) {
-          const numColor = parseInt(event.payload.color, 10);
-          if (!isNaN(numColor) && numColor >= 0 && numColor <= 16777215) {
-            danmakuColor = '#' + numColor.toString(16).padStart(6, '0');
-          }
+  if (props.platform === Platform.DOUYU) {
+    console.log('[MainPlayer] Setting up Douyu danmaku listener for roomId:', props.roomId);
+    try {
+      await invoke('start_danmaku_listener', { roomId: props.roomId });
+      unlistenDanmaku = await listen<DanmakuMessage>(`danmaku-${props.roomId}`, event => {
+        if (art.value && art.value.plugins.artplayerPluginDanmuku && event.payload) {
+          const danmaku = event.payload;
+          art.value.plugins.artplayerPluginDanmuku.emit({
+            text: danmaku.content,
+            color: danmaku.color || '#fff',
+            border: !!danmaku.color, 
+          });
         }
-        
-        danmukuPlugin.emit({
-          text: event.payload.content || '',
-          color: danmakuColor,
-          mode: 0,
-        });
-      }
-    });
-    console.log('[MainPlayer] Successfully listening for "danmaku" for ArtPlayer.');
-  } catch (error) {
-    console.error('[MainPlayer] Error setting up ArtPlayer danmaku listener:', error);
+      });
+      console.log('[MainPlayer] Douyu danmaku listener started.');
+    } catch (e) {
+      console.error('[MainPlayer] Error starting Douyu danmaku listener:', e);
+    }
+  } else if (props.platform === Platform.DOUYIN) {
+    console.log('[MainPlayer] Douyin danmaku listener setup placeholder for roomId:', props.roomId);
+  } else {
+    console.log('[MainPlayer] Danmaku listener not applicable for platform:', props.platform);
   }
 };
 
-onMounted(async () => {
-  console.log('[MainPlayer] Mounted. Initial roomId:', props.roomId);
-  if (props.roomId) {
-    await nextTick();
-    await initPlayer();
+watch(() => [props.roomId, props.platform], ([newRoomId, newPlatform], [oldRoomId, oldPlatform]) => {
+  if ((newRoomId && newRoomId !== oldRoomId) || (newPlatform && newPlatform !== oldPlatform) || (newRoomId && !art.value)) {
+    console.log(`[MainPlayer] roomId or platform prop changed. Old: ${oldPlatform}/${oldRoomId}, New: ${newPlatform}/${newRoomId}. Re-initializing player.`);
+    initPlayer();
+  } else if (!newRoomId && art.value) {
+    console.log('[MainPlayer] roomId prop became null. Destroying player.');
+    destroyPlayer();
   }
 });
 
-watch(() => props.roomId, async (newRoomId, oldRoomId) => {
-  console.log(`[MainPlayer] Watcher: Room ID changed from ${oldRoomId} to ${newRoomId}`);
-  if (newRoomId === oldRoomId && art.value) return;
-
-  await destroyPlayer();
-
-  if (newRoomId) {
-    await nextTick();
-    await initPlayer();
+watch(() => props.streamUrl, (newUrl, oldUrl) => {
+  if (props.platform === Platform.DOUYIN && newUrl && newUrl !== oldUrl && art.value) {
+    console.log(`[MainPlayer] Douyin streamUrl prop changed to ${newUrl}. Re-initializing player.`);
+    initPlayer(); 
   }
-}, { immediate: false });
+});
+
+onMounted(async () => {
+  console.log('[MainPlayer] Component mounted. Initializing player...');
+  await nextTick();
+  if (props.roomId) {
+    initPlayer();
+  } else {
+    console.log('[MainPlayer] No roomId on mount, player not initialized.');
+    isLoadingStream.value = false;
+  }
+});
 
 onUnmounted(async () => {
-  console.log('[MainPlayer] Unmounted. Destroying player.');
+  console.log('[MainPlayer] Component unmounted. Destroying player and listeners.');
   await destroyPlayer();
 });
+
+function determineStreamType(url: string): 'flv' | 'hls' | 'mp4' | 'm3u8' {
+    if (!url) return 'flv';
+    if (url.includes('.flv')) return 'flv';
+    if (url.includes('.m3u8')) return 'm3u8';
+    if (url.includes('.mp4')) return 'mp4';
+    console.warn('[MainPlayer] Could not determine stream type from URL, defaulting to flv for URL:', url);
+    return 'flv'; 
+}
 </script>
 
 <style scoped>

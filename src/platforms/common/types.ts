@@ -102,4 +102,14 @@ export interface CommonCategoryGroup {
   groupName: string; // e.g., "热门游戏", "娱乐推荐"
   platform: SupportedPlatform;
   categories: CommonPlatformCategory[];
+}
+
+// Added for stream details fetched by platform-specific commands
+export interface LiveStreamInfo {
+  title?: string | null;
+  anchor_name?: string | null; // Douyin uses this
+  avatar?: string | null;      // Douyin uses this
+  stream_url?: string | null;
+  error_message?: string | null;
+  // Potentially other platform-specific fields if not covered by StreamRoomDetails
 } 

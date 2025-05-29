@@ -62,20 +62,24 @@ async fn flv_proxy_handler(
                 response_builder.streaming(byte_stream)
 
             } else {
-                let status = upstream_response.status();
+                let status_from_reqwest = upstream_response.status(); // Renamed for clarity
                 let error_text = upstream_response.text().await.unwrap_or_else(|e| {
                     format!("Failed to read error body from upstream: {}", e)
                 });
                 eprintln!(
                     "[Rust/proxy.rs handler] Upstream request to {} failed with status: {}. Body: {}",
                     url,
-                    status,
+                    status_from_reqwest, // Use the renamed variable for logging
                     error_text
                 );
-                HttpResponse::build(status).body(format!(
+                // Convert reqwest::StatusCode to actix_web::http::StatusCode
+                let actix_status_code = actix_web::http::StatusCode::from_u16(status_from_reqwest.as_u16())
+                    .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
+
+                HttpResponse::build(actix_status_code).body(format!(
                     "Error fetching FLV stream from upstream (reqwest): {}. Status: {}. Details: {}",
                     url,
-                    status,
+                    status_from_reqwest, // Log original reqwest status code
                     error_text
                 ))
             }
