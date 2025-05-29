@@ -73,6 +73,19 @@ interface RustDanmakuPayload {
   // color is not typically sent from this backend payload struct for danmaku content
 }
 
+// Interface for Douyu specific danmaku payload from Rust
+interface DouyuRustDanmakuPayload {
+  type: "chatmsg" | "uenter"; // "chatmsg" for regular danmaku, "uenter" for user entry
+  room_id: string;       // Room ID from Rust
+  nickname: string;    // "nn" from Douyu
+  content: string;     // "txt" from Douyu (only for chatmsg)
+  level: string;       // "level" from Douyu
+  badgeName?: string;  // "bnn" from Douyu
+  badgeLevel?: string; // "bl" from Douyu
+  color?: string;      // "col" from Douyu (optional chatmsg color)
+  uid?: string;        // "uid" from Douyu (only for uenter)
+}
+
 // This interface represents the Rust struct: crate::platforms::common::GetStreamUrlPayload
 // It is used as the type for the value of the 'payload' key when invoking 'start_douyin_danmu_listener'
 interface RustGetStreamUrlPayload {
@@ -91,6 +104,7 @@ interface DanmakuMessage { // This is the structure used in danmakuMessages arra
   badgeName?: string;   // Douyin doesn't have this
   badgeLevel?: string;  // String for display, from fans_club_level
   color?: string;       // For UI customization
+  room_id?: string;     // Added to match payload from Rust for Douyu
 }
 
 const props = defineProps<{
@@ -172,7 +186,7 @@ const startDanmaku = async () => {
       await invoke('start_douyin_danmu_listener', { payload: rustPayload });
       eventName = 'danmaku-message';
     } else if (props.platform === Platform.DOUYU) {
-      console.log('[Player] Invoking start_danmaku_listener for room:', props.roomId);
+      console.log('[Player] Invoking start_danmaku_listener for Douyu room:', props.roomId);
       await invoke('start_danmaku_listener', { roomId: props.roomId });
       eventName = `danmaku-${props.roomId}`;
     } else {
@@ -183,28 +197,58 @@ const startDanmaku = async () => {
     }
     console.log(`[Player] Setting up event listener for: ${eventName}`);
     // Listen for the raw payload from Rust
-    unlistenDanmaku = await listen<RustDanmakuPayload>(eventName, (event: TauriEvent<RustDanmakuPayload>) => {
+    unlistenDanmaku = await listen<RustDanmakuPayload | DouyuRustDanmakuPayload>(eventName, (event: TauriEvent<RustDanmakuPayload | DouyuRustDanmakuPayload>) => {
       if (art.value && art.value.plugins.artplayerPluginDanmuku && event.payload) {
-        const rustP = event.payload;
+        const rawPayload = event.payload;
+        let frontendDanmaku: DanmakuMessage | null = null;
 
-        // Transform RustDanmakuPayload to DanmakuMessage for frontend use
-        const frontendDanmaku: DanmakuMessage = {
-          nickname: rustP.user || '未知用户', // Provide default for nickname
-          content: rustP.content || '',       // Provide default for content
-          level: String(rustP.user_level || 0), // Convert number to string, provide default
-          // badgeName: undefined, // Douyin doesn't have badgeName, so omit or undefined
-          badgeLevel: rustP.fans_club_level > 0 ? String(rustP.fans_club_level) : undefined, // Convert fans_club_level to string if > 0
-          // color: undefined, // Color can be assigned later or by specific logic if needed
-          // type and uid can be added if they are part of rustP and needed
-        };
+        if (props.platform === Platform.DOUYIN) {
+          // Assuming rawPayload is RustDanmakuPayload for Douyin
+          const rustP = rawPayload as RustDanmakuPayload;
+          frontendDanmaku = {
+            nickname: rustP.user || '未知用户',
+            content: rustP.content || '',
+            level: String(rustP.user_level || 0),
+            badgeLevel: rustP.fans_club_level > 0 ? String(rustP.fans_club_level) : undefined,
+            // Douyin specific transformations if any
+          };
+        } else if (props.platform === Platform.DOUYU) {
+          // Assuming rawPayload is DouyuRustDanmakuPayload for Douyu
+          const douyuP = rawPayload as DouyuRustDanmakuPayload;
+          if (douyuP.type === "chatmsg") {
+            frontendDanmaku = {
+              nickname: douyuP.nickname || '未知用户',
+              content: douyuP.content || '',
+              level: String(douyuP.level || '0'),
+              badgeName: douyuP.badgeName || undefined,
+              badgeLevel: douyuP.badgeLevel && douyuP.badgeLevel !== "0" ? String(douyuP.badgeLevel) : undefined,
+              color: douyuP.color || '#FFFFFF', // Use Douyu color or default
+              uid: douyuP.uid, // Might not be used in DanmuList, but good to have
+              room_id: douyuP.room_id, // For debugging or future use
+            };
+          } else if (douyuP.type === "uenter") {
+            // Handle user entry messages, perhaps log or display differently
+            // For now, let's transform it into a system-like message in DanmuList
+            frontendDanmaku = {
+              nickname: '系统消息', // Or use douyuP.nickname if preferred for entry messages
+              content: `${douyuP.nickname || '用户'} 进入直播间`,
+              level: '0', // System messages typically don't have levels
+              color: '#A9A9A9', // A distinct color for system messages
+              uid: douyuP.uid,
+              room_id: douyuP.room_id,
+            };
+          }
+        }
 
-        art.value.plugins.artplayerPluginDanmuku.emit({
-          text: frontendDanmaku.content,
-          color: frontendDanmaku.color || '#FFFFFF', // Use transformed data's color or default
-        });
-        danmakuMessages.value.push(frontendDanmaku); // Push the transformed, frontend-ready danmaku object
-        if (danmakuMessages.value.length > 200) {
-          danmakuMessages.value.splice(0, danmakuMessages.value.length - 200);
+        if (frontendDanmaku) {
+          art.value.plugins.artplayerPluginDanmuku.emit({
+            text: frontendDanmaku.content,
+            color: frontendDanmaku.color || '#FFFFFF', 
+          });
+          danmakuMessages.value.push(frontendDanmaku); 
+          if (danmakuMessages.value.length > 200) {
+            danmakuMessages.value.splice(0, danmakuMessages.value.length - 200);
+          }
         }
       } else {
         console.log('[Player] Danmaku received, but Artplayer or plugin not ready or no payload.');
@@ -234,15 +278,30 @@ const stopDanmaku = async () => {
   }
   if (props.platform === Platform.DOUYU && props.roomId) {
       try {
-        console.log('[Player] Invoking stop_danmaku_listener for Douyu room:', props.roomId);
-        await invoke('stop_danmaku_listener', { roomId: props.roomId });
+        console.log('[Player] Invoking stop_danmaku_listener for Douyu room:', props.roomId || "all active (if stop supports)");
+        if (props.roomId) {
+            await invoke('stop_danmaku_listener', { roomId: props.roomId });
+        } else {
+            console.log('[Player] No specific Douyu room ID to stop, danmaku might have been stopped by new room init or global cleanup.');
+        }
       } catch (error) {
-        console.error('[Player] Error invoking stop_danmaku_listener:', error);
+        console.error('[Player] Error invoking stop_danmaku_listener for Douyu:', error);
       }
+  } else if (props.platform === Platform.DOUYIN) {
+    console.log('[Player] stopDanmaku: Stopping Douyin danmaku listener via specific command.');
+    try {
+      const rustPayload: RustGetStreamUrlPayload = { 
+        args: { room_id_str: "stop_listening" },
+        platform: Platform.DOUYIN,
+      };
+      await invoke('start_douyin_danmu_listener', { payload: rustPayload });
+    } catch (error) {
+      console.error('[Player] Error stopping Douyin danmaku listener in stopDanmaku:', error);
+    }
   }
   isDanmakuStopped.value = true;
   isLoadingDanmaku.value = false;
-  console.log(`[Player] Danmaku stopped for room: ${props.roomId}.`);
+  console.log(`[Player] Danmaku stop process initiated for room: ${props.roomId}, platform: ${props.platform}.`);
 };
 
 const initializePlayerAndStream = async (roomId: string, platform: Platform, directUrl?: string | null) => {
@@ -382,8 +441,25 @@ watch(() => [props.roomId, props.platform, props.streamUrl], async ([newRoomId, 
   if (newRoomId && newPlatform) {
     if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== oldStreamUrl && newStreamUrl)) {
       console.log('[Player] Critical props changed. Re-initializing.');
+      if (oldRoomId && oldPlatform && (oldRoomId !== newRoomId || oldPlatform !== newPlatform)) {
+          console.log(`[Player] Watcher: Stopping danmaku for old room ${oldRoomId} on platform ${oldPlatform}`);
+          if (oldPlatform === Platform.DOUYU) {
+              try {
+                  await invoke('stop_danmaku_listener', { roomId: oldRoomId });
+              } catch (e) { console.error(`[Player] Error stopping old Douyu danmaku listener for ${oldRoomId}:`, e); }
+          } else if (oldPlatform === Platform.DOUYIN) {
+              try {
+                  const stopPayload: RustGetStreamUrlPayload = { args: { room_id_str: "stop_listening" }, platform: Platform.DOUYIN };
+                  await invoke('start_douyin_danmu_listener', { payload: stopPayload });
+              } catch (e) { console.error(`[Player] Error stopping old Douyin danmaku listener:`, e); }
+          }
+          if (oldPlatform === Platform.DOUYU) {
+              console.log('[Player] Watcher changing stream: old platform was Douyu, stopping proxy.');
+              await stopProxy();
+          }
+      }
       const urlToPass = newPlatform === Platform.DOUYIN ? newStreamUrl : undefined;
-      await initializePlayerAndStream(newRoomId, newPlatform, urlToPass);
+      await initializePlayerAndStream(newRoomId, newPlatform as Platform, urlToPass);
     } else {
       console.log('[Player] Props changed but no re-initialization deemed necessary.');
     }
@@ -425,28 +501,35 @@ onUnmounted(async () => {
     unlistenDanmaku = null;
   }
 
-  if (props.platform === Platform.DOUYIN) {
-    console.log('[Player] Unmounting: Stopping Douyin danmaku listener via specific command.');
+  const currentRoomId = props.roomId;
+  const currentPlatform = props.platform;
+
+  console.log(`[Player] Unmounting: Current platform ${currentPlatform}, room ${currentRoomId}`);
+
+  if (currentPlatform === Platform.DOUYIN) {
+    console.log('[Player] Unmounting: Stopping Douyin danmaku listener.');
     try {
       const rustPayload: RustGetStreamUrlPayload = { 
-        args: { room_id_str: "stop_listening" }, 
-        platform: props.platform, 
+        args: { room_id_str: "stop_listening" },
+        platform: Platform.DOUYIN,
       };
       await invoke('start_douyin_danmu_listener', { payload: rustPayload });
     } catch (error) {
       console.error('[Player] Error stopping Douyin danmaku listener on unmount:', error);
     }
-  } else if (props.platform === Platform.DOUYU && props.roomId) {
+  } else if (currentPlatform === Platform.DOUYU && currentRoomId) {
     try {
-      console.log('[Player] Unmounting: Invoking stop_danmaku_listener for Douyu room:', props.roomId);
-      await invoke('stop_danmaku_listener', { roomId: props.roomId });
+      console.log('[Player] Unmounting: Invoking stop_danmaku_listener for Douyu room:', currentRoomId);
+      await invoke('stop_danmaku_listener', { roomId: currentRoomId });
     } catch (error) {
       console.error('[Player] Error invoking stop_danmaku_listener for Douyu on unmount:', error);
     }
+  } else if (currentPlatform === Platform.DOUYU && !currentRoomId) {
+    console.log('[Player] Unmounting: Douyu platform but no specific room ID. Danmaku might have been stopped or was never started for a specific room in this instance.');
   }
 
-  if (props.platform === Platform.DOUYU) { // Only stop proxy if it was a Douyu stream
-      await stopProxy();
+  if (currentPlatform === Platform.DOUYU) {
+    await stopProxy();
   }
 
   if (art.value) {
@@ -454,7 +537,7 @@ onUnmounted(async () => {
     art.value.destroy();
     art.value = null;
   }
-  danmakuMessages.value = []; // Clear danmaku list
+  danmakuMessages.value = [];
   console.log('[Player] Cleanup on unmount finished.');
 });
 </script>

@@ -6,17 +6,20 @@ use url::Url;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tauri::{Window, Emitter};
+use tokio::sync::oneshot;
 
 pub struct DanmakuClient {
     room_id: String,
     window: Window,
+    stop_signal_rx: oneshot::Receiver<()>,
 }
 
 impl DanmakuClient {
-    pub fn new(room_id: &str, window: Window) -> Self {
+    pub fn new(room_id: &str, window: Window, stop_signal_rx: oneshot::Receiver<()>) -> Self {
         Self {
             room_id: room_id.to_string(),
             window,
+            stop_signal_rx,
         }
     }
 
@@ -80,81 +83,97 @@ impl DanmakuClient {
             }
         });
 
-        // 消息发送任务
+        // Keep a reference to self.stop_signal_rx to move into tasks
+        // We need to select between receiving a message from the websocket and the stop signal
+        let mut stop_rx = std::mem::replace(&mut self.stop_signal_rx, oneshot::channel().1);
+
+        // Message sending task
         let send_task = tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                if let Err(_) = write.send(msg).await {
+            while let Some(msg_to_send) = rx.recv().await {
+                if let Err(_) = write.send(msg_to_send).await {
                     break;
                 }
             }
         });
 
         let window = self.window.clone();
+        let room_id_clone = self.room_id.clone();
 
-        // 处理接收到的消息
-        while let Some(msg) = read.next().await {
-            match msg {
-                Ok(Message::Binary(data)) => {
-                    if data.len() < 13 {
-                        continue;
-                    }
-
-                    let content = String::from_utf8_lossy(&data[12..data.len()-1]);
-                    let mut result = HashMap::new();
-                    for item in content.split('/') {
-                        if item.is_empty() {
-                            continue;
-                        }
-                        if let Some((key, value)) = item.split_once("@=") {
-                            result.insert(
-                                key.to_string(),
-                                value.replace("@S", "/").replace("@A", "@")
-                            );
-                        }
-                    }
-
-                    if result.get("type").map_or(false, |t| t == "chatmsg") {
-                        let unknown = "unknown".to_string();
-                        let empty = "".to_string();
-                        let zero = "0".to_string();
-                        
-                        let danmaku = serde_json::json!({
-                            "type": "chatmsg", // Add type field to be consistent with frontend DanmakuMessage
-                            "nickname": result.get("nn").unwrap_or(&unknown),
-                            "content": result.get("txt").unwrap_or(&empty),
-                            "level": result.get("level").unwrap_or(&zero),
-                            "badgeName": result.get("bnn").unwrap_or(&empty),
-                            "badgeLevel": result.get("bl").unwrap_or(&zero),
-                            "color": result.get("col").map_or(None, |c| Some(c.to_string())) // Add color if present
-                        });
-
-                        let _ = window.emit("danmaku", danmaku);
-                    } else if result.get("type").map_or(false, |t| t == "uenter") {
-                        let unknown = "unknown".to_string();
-                        let empty = "".to_string();
-                        let zero = "0".to_string();
-
-                        let uenter_msg = serde_json::json!({
-                            "type": "uenter",
-                            "uid": result.get("uid").unwrap_or(&empty),
-                            "nickname": result.get("nn").unwrap_or(&unknown),
-                            "level": result.get("level").unwrap_or(&zero),
-                            "badgeName": result.get("bnn").unwrap_or(&empty),
-                            "badgeLevel": result.get("bl").unwrap_or(&zero)
-                        });
-                        let _ = window.emit("danmaku", uenter_msg);
-                    }
-                }
-                Ok(Message::Close(_)) | Err(_) => {
+        // Processing incoming messages
+        loop {
+            tokio::select! {
+                _ = &mut stop_rx => {
+                    eprintln!("[Douyu Danmaku {}] Stop signal received, terminating listener.", room_id_clone);
                     break;
                 }
-                _ => {}
+                msg_option = read.next() => {
+                    match msg_option {
+                        Some(Ok(Message::Binary(data))) => {
+                            if data.len() < 13 {
+                                continue;
+                            }
+
+                            let content = String::from_utf8_lossy(&data[12..data.len()-1]);
+                            let mut result = HashMap::new();
+                            for item in content.split('/') {
+                                if item.is_empty() {
+                                    continue;
+                                }
+                                if let Some((key, value)) = item.split_once("@=") {
+                                    result.insert(
+                                        key.to_string(),
+                                        value.replace("@S", "/").replace("@A", "@")
+                                    );
+                                }
+                            }
+                            
+                            let event_name = format!("danmaku-{}", room_id_clone);
+
+                            if result.get("type").map_or(false, |t| t == "chatmsg") {
+                                let unknown = "unknown".to_string();
+                                let empty = "".to_string();
+                                let zero = "0".to_string();
+                                
+                                let danmaku = serde_json::json!({
+                                    "type": "chatmsg",
+                                    "nickname": result.get("nn").unwrap_or(&unknown),
+                                    "content": result.get("txt").unwrap_or(&empty),
+                                    "level": result.get("level").unwrap_or(&zero),
+                                    "badgeName": result.get("bnn").unwrap_or(&empty),
+                                    "badgeLevel": result.get("bl").unwrap_or(&zero),
+                                    "color": result.get("col").map_or(None, |c| Some(c.to_string())),
+                                    "room_id": room_id_clone.clone()
+                                });
+
+                                let _ = window.emit(&event_name, danmaku);
+                            } else if result.get("type").map_or(false, |t| t == "uenter") {
+                                let unknown = "unknown".to_string();
+                                let empty = "".to_string();
+                                let zero = "0".to_string();
+
+                                let uenter_msg = serde_json::json!({
+                                    "type": "uenter",
+                                    "uid": result.get("uid").unwrap_or(&empty),
+                                    "nickname": result.get("nn").unwrap_or(&unknown),
+                                    "level": result.get("level").unwrap_or(&zero),
+                                    "badgeName": result.get("bnn").unwrap_or(&empty),
+                                    "badgeLevel": result.get("bl").unwrap_or(&zero),
+                                    "room_id": room_id_clone.clone()
+                                });
+                                let _ = window.emit(&event_name, uenter_msg);
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) | Some(Err(_)) | None => {
+                            eprintln!("[Douyu Danmaku {}] Websocket closed or error, terminating listener.", room_id_clone);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
-
-        // 取消发送任务
         send_task.abort();
-
+        eprintln!("[Douyu Danmaku {}] Listener stopped.", room_id_clone);
         Ok(())
     }
 } 

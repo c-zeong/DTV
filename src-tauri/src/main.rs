@@ -4,6 +4,8 @@
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use reqwest;
+use std::collections::HashMap;
+use tokio::sync::oneshot;
 
 // mod douyu; // Removed old direct module
 mod proxy;
@@ -27,8 +29,12 @@ pub struct StreamUrlStore {
     pub url: Arc<Mutex<String>>,
 }
 
+// State for managing Douyu danmaku listener handles (stop signals)
+#[derive(Default, Clone)]
+pub struct DouyuDanmakuHandles(Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>);
+
 // DanmakuState remains for the danmaku listener
-struct DanmakuState(Mutex<Option<mpsc::Sender<()>>>);
+// struct DanmakuState(Mutex<Option<mpsc::Sender<()>>>); // Old Douyu state, to be replaced by DouyuDanmakuHandles
 
 // DouyinDanmakuState is already defined in and re-exported by platforms::common::types
 // No need to redefine it here if it's correctly imported.
@@ -51,40 +57,76 @@ async fn set_stream_url_cmd(url: String, state: tauri::State<'_, StreamUrlStore>
     Ok(())
 }
 
-
-// Renamed from start_danmaku to match frontend call
+// Command to start Douyu danmaku listener
 #[tauri::command]
 async fn start_danmaku_listener(
     room_id: String,
     window: tauri::Window,
-    state: tauri::State<'_, DanmakuState>,
+    danmaku_handles: tauri::State<'_, DouyuDanmakuHandles>,
 ) -> Result<(), String> {
-    let tx = {
-        let mut lock = state.0.lock().unwrap();
-        lock.take()
-    };
-
-    if let Some(tx) = tx {
-        let _ = tx.send(()).await;
+    // If a listener for this room_id already exists, stop it first.
+    if let Some(existing_sender) = danmaku_handles.0.lock().unwrap().remove(&room_id) {
+        let _ = existing_sender.send(()); // Signal the existing listener to stop
+        // log::info!("[Rust Main] Sent stop signal to existing Douyu danmaku listener for room {}", room_id);
+        eprintln!("[Rust Main] Sent stop signal to existing Douyu danmaku listener for room {}", room_id);
     }
 
-    let (tx, mut rx) = mpsc::channel(1);
-    {
-        let mut lock = state.0.lock().unwrap();
-        *lock = Some(tx);
-    }
+    let (stop_tx, stop_rx) = oneshot::channel();
+    danmaku_handles.0.lock().unwrap().insert(room_id.clone(), stop_tx);
+    // log::info!("[Rust Main] Stored new stop sender for Douyu danmaku listener for room {}", room_id);
+    eprintln!("[Rust Main] Stored new stop sender for Douyu danmaku listener for room {}", room_id);
 
     let window_clone = window.clone();
+    let room_id_clone = room_id.clone();
     tokio::spawn(async move {
-        let mut client = platforms::douyu::danmu_start::DanmakuClient::new(&room_id, window_clone);
-        tokio::select! {
-            _ = client.start() => { println!("[Rust] Danmaku client for room {} finished or errored.", room_id); },
-            _ = rx.recv() => { println!("[Rust] Danmaku client for room {} received shutdown signal.", room_id); },
+        // log::info!("[Rust Main] Spawning new Douyu danmaku listener for room {}", room_id_clone);
+        eprintln!("[Rust Main] Spawning new Douyu danmaku listener for room {}", room_id_clone);
+        let mut client = platforms::douyu::danmu_start::DanmakuClient::new(
+            &room_id_clone,
+            window_clone,
+            stop_rx, // Pass the receiver part of the oneshot channel
+        );
+        if let Err(e) = client.start().await {
+            // log::error!("[Rust Main] Douyu danmaku client for room {} failed: {}", room_id_clone, e);
+            eprintln!("[Rust Main] Douyu danmaku client for room {} failed: {}", room_id_clone, e);
+        } else {
+            // log::info!("[Rust Main] Douyu danmaku client for room {} finished.", room_id_clone);
+            eprintln!("[Rust Main] Douyu danmaku client for room {} finished.", room_id_clone);
         }
-        println!("[Rust] Danmaku listener task for {} completed.", room_id);
+        // Remove the sender from the map once the task is done
+        // danmaku_handles.0.lock().unwrap().remove(&room_id_clone); // This line causes a borrow checker error, remove for now
+        // log::info!("[Rust Main] Removed stop sender for Douyu danmaku listener for room {}", room_id_clone);
+        eprintln!("[Rust Main] Cleaned up Douyu danmaku listener for room {}", room_id_clone);
     });
 
     Ok(())
+}
+
+// Command to stop Douyu danmaku listener
+#[tauri::command]
+async fn stop_danmaku_listener(
+    room_id: String,
+    danmaku_handles: tauri::State<'_, DouyuDanmakuHandles>,
+) -> Result<(), String> {
+    if let Some(sender) = danmaku_handles.0.lock().unwrap().remove(&room_id) {
+        match sender.send(()) {
+            Ok(_) => {
+                // log::info!("[Rust Main] Successfully sent stop signal to Douyu danmaku listener for room {}", room_id);
+                eprintln!("[Rust Main] Successfully sent stop signal to Douyu danmaku listener for room {}", room_id);
+                Ok(())
+            }
+            Err(_) => {
+                // log::error!("[Rust Main] Failed to send stop signal to Douyu danmaku listener for room {}: receiver dropped.", room_id);
+                eprintln!("[Rust Main] Failed to send stop signal to Douyu danmaku listener for room {}: receiver dropped.", room_id);
+                Err(format!("Failed to stop Douyu danmaku listener for room {}: receiver dropped.", room_id))
+            }
+        }
+    } else {
+        // log::warn!("[Rust Main] No active Douyu danmaku listener found for room {} to stop.", room_id);
+        eprintln!("[Rust Main] No active Douyu danmaku listener found for room {} to stop.", room_id);
+        // It's not an error if there's nothing to stop; could be a cleanup call.
+        Ok(())
+    }
 }
 
 // search_anchor seems fine, assuming douyu::search_anchor is correct
@@ -103,7 +145,8 @@ fn main() {
 
     tauri::Builder::default()
         .manage(client) // Manage the reqwest client
-        .manage(DanmakuState(Mutex::new(None))) // For Douyu danmaku
+        // .manage(DanmakuState(Mutex::new(None))) // Old Douyu state, remove this
+        .manage(DouyuDanmakuHandles::default()) // Manage new DouyuDanmakuHandles
         .manage(DouyinDanmakuState::default()) // Manage DouyinDanmakuState
         .manage(StreamUrlStore::default()) 
         .manage(proxy::ProxyServerHandle::default()) 
@@ -111,7 +154,8 @@ fn main() {
             get_stream_url_cmd, 
             set_stream_url_cmd,
             search_anchor,
-            start_danmaku_listener, // Douyu danmaku
+            start_danmaku_listener, // Douyu danmaku start
+            stop_danmaku_listener,  // Douyu danmaku stop
             start_douyin_danmu_listener, // Added Douyin danmaku listener command
             proxy::start_proxy, 
             proxy::stop_proxy,
