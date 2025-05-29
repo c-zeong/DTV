@@ -18,6 +18,8 @@ use platforms::douyu::fetch_three_cate;
 use platforms::douyin::generate_douyin_ms_token;
 use platforms::douyin::fetch_douyin_partition_rooms;
 use platforms::douyin::get_douyin_live_stream_url;
+use platforms::douyin::start_douyin_danmu_listener;
+use platforms::common::DouyinDanmakuState;
 // get_stream_url and search_anchor will be directly available via platforms::douyu now
 
 #[derive(Default, Clone)]
@@ -27,6 +29,9 @@ pub struct StreamUrlStore {
 
 // DanmakuState remains for the danmaku listener
 struct DanmakuState(Mutex<Option<mpsc::Sender<()>>>);
+
+// DouyinDanmakuState is already defined in and re-exported by platforms::common::types
+// No need to redefine it here if it's correctly imported.
 
 // This is the command that should be used for getting stream URL if it interacts with StreamUrlStore
 #[tauri::command]
@@ -98,14 +103,16 @@ fn main() {
 
     tauri::Builder::default()
         .manage(client) // Manage the reqwest client
-        .manage(DanmakuState(Mutex::new(None)))
+        .manage(DanmakuState(Mutex::new(None))) // For Douyu danmaku
+        .manage(DouyinDanmakuState::default()) // Manage DouyinDanmakuState
         .manage(StreamUrlStore::default()) 
         .manage(proxy::ProxyServerHandle::default()) 
         .invoke_handler(tauri::generate_handler![
             get_stream_url_cmd, 
             set_stream_url_cmd,
             search_anchor,
-            start_danmaku_listener,
+            start_danmaku_listener, // Douyu danmaku
+            start_douyin_danmu_listener, // Added Douyin danmaku listener command
             proxy::start_proxy, 
             proxy::stop_proxy,
             fetch_categories, 

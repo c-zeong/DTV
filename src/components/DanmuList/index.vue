@@ -8,20 +8,20 @@
         </div>
       </div>
       <div class="danmu-messages-area" ref="danmakuListEl" @scroll="handleScroll">
-        <div v-if="danmakuList.length === 0" class="empty-danmu-placeholder">
+        <div v-if="!messages || messages.length === 0" class="empty-danmu-placeholder">
           <p>暂无弹幕</p>
           <p v-if="!props.roomId">请先选择一个直播间</p>
           <p v-else>连接中或弹幕稀疏...</p>
         </div>
-        <div v-for="(danmaku) in danmakuList" :key="danmaku.id" class="danmu-item">
+        <div v-for="(danmaku, index) in messages" :key="index" class="danmu-item">
           <div class="danmu-meta-line">
-            <span v-if="danmaku.sender.badgeName" class="danmu-badge">
-              <span class="badge-name">{{ danmaku.sender.badgeName }}</span>
-              <span v-if="danmaku.sender.badgeLevel" class="badge-level">{{ danmaku.sender.badgeLevel }}</span>
+            <span v-if="danmaku.badgeName" class="danmu-badge">
+              <span class="badge-name">{{ danmaku.badgeName }}</span>
+              <span v-if="danmaku.badgeLevel" class="badge-level">{{ danmaku.badgeLevel }}</span>
             </span>
-            <span class="danmu-user" :style="{ color: danmaku.color || userColor(danmaku.sender.nickname) }">
-              <span v-if="danmaku.sender.level" class="user-level">[Lv.{{ danmaku.sender.level }}]</span>
-              {{ danmaku.sender.nickname }}:
+            <span class="danmu-user" :style="{ color: danmaku.color || userColor(danmaku.nickname) }">
+              <span v-if="danmaku.level" class="user-level">[Lv.{{ danmaku.level }}]</span>
+              {{ danmaku.nickname }}:
             </span>
           </div>
           <div class="danmu-content-line">
@@ -35,7 +35,7 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, watch, nextTick, onUnmounted, onMounted } from 'vue';
+  import { ref, watch, nextTick, type PropType } from 'vue';
   // import { invoke } from '@tauri-apps/api/core'; // No longer directly used for start_danmaku_listener
   import { listen } from '@tauri-apps/api/event';
   import { startDanmakuListener, getCurrentPlatform } from '../../platforms/common/apiService';
@@ -44,50 +44,55 @@
   // TODO: Import other platform parsers as needed
   // import { parseBilibiliDanmakuMessage } from '../../platforms/bilibili/parsers';
   
+  // Assuming DanmakuMessage from player/index.vue is the structure of messages passed in props
+  // If not, this interface needs to match the actual structure provided by player/index.vue
+  interface DanmakuUIMessage { // Renamed to avoid conflict if CommonDanmakuMessage is very different
+    id?: string; // If your messages have unique IDs, use them for :key for better performance
+    nickname: string;
+    content: string;
+    level?: string; // Made optional to match player/index.vue's DanmakuMessage
+    badgeName?: string;
+    badgeLevel?: string;
+    color?: string;
+    // Ensure all fields used in the template are here
+    // sender?: { nickname: string; level?: string; badgeName?: string; badgeLevel?: string }; // if sender is an object
+  }
+  
   const props = defineProps<{
-    roomId: string | null; // Allow null if no room is selected
+    roomId: string | null;
+    messages: DanmakuUIMessage[]; // Use PropType for complex types if needed, or direct type here
+                                  // Make sure DanmakuUIMessage matches what player/index.vue provides in danmakuMessages
   }>();
   
-  const danmakuList = ref<CommonDanmakuMessage[]>([]); // Use CommonDanmakuMessage
   const danmakuListEl = ref<HTMLElement | null>(null);
-  let unlistenDanmaku: (() => void) | null = null;
-  let currentRoomId: string | null = null;
-  const autoScroll = ref(true); // 默认开启自动滚动
-  const userScrolled = ref(false); // 用户是否手动滚动
+  const autoScroll = ref(true); 
+  const userScrolled = ref(false);
   
-  // Simple hashing function to get a color for a user nickname
-  const userColor = (nickname: string) => {
+  const userColor = (nickname: string | undefined) => {
+    if (!nickname || nickname.length === 0) {
+      const defaultHue = 0;
+      const defaultSaturation = 0;
+      const defaultLightness = 75;
+      return `hsl(${defaultHue}, ${defaultSaturation}%, ${defaultLightness}%)`;
+    }
     let hash = 0;
     for (let i = 0; i < nickname.length; i++) {
       hash = nickname.charCodeAt(i) + ((hash << 5) - hash);
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash; 
     }
     const hue = hash % 360;
-    return `hsl(${hue}, 70%, 75%)`; // Adjusted for better readability on dark background
+    return `hsl(${hue}, 70%, 75%)`;
   };
   
-  // 处理滚动事件，检测用户是否手动滚动
   const handleScroll = () => {
     if (!danmakuListEl.value) return;
-    
     const el = danmakuListEl.value;
-    // 如果用户向上滚动，则标记为用户手动滚动
     if (el.scrollHeight - el.scrollTop - el.clientHeight > 50) {
       userScrolled.value = true;
     } else {
-      // 如果滚动到接近底部，则重置手动滚动状态
       userScrolled.value = false;
     }
   };
-  
-  // 监视自动滚动设置变化
-  watch(autoScroll, (newValue) => {
-    if (newValue) {
-      // 如果重新启用自动滚动，立即滚动到底部
-      userScrolled.value = false;
-      scrollToBottom();
-    }
-  });
   
   const scrollToBottom = () => {
     nextTick(() => {
@@ -97,102 +102,29 @@
       }
     });
   };
-  
-  const setupDanmakuListener = async (roomIdToListenFor: string) => {
-    if (currentRoomId === roomIdToListenFor && unlistenDanmaku) {
-      console.log('[DanmuList] Listener already active for room:', roomIdToListenFor);
-      return;
-    }
-  
-    if (unlistenDanmaku) {
-      console.log('[DanmuList] Cleaning up previous listener for room:', currentRoomId);
-      unlistenDanmaku();
-      unlistenDanmaku = null;
-    }
-    
-    currentRoomId = roomIdToListenFor;
-    danmakuList.value = [];
-    console.log('[DanmuList] Setting up listener for room:', currentRoomId);
-  
-    try {
-      // await invoke('start_danmaku_listener', { roomId: currentRoomId }); // Old call
-      await startDanmakuListener(currentRoomId); // New call via apiService
-      
-      // The payload from `listen` is initially `any` or the type provided by the backend (which might be a simple JSON string or object)
-      unlistenDanmaku = await listen<any>('danmaku', (event) => { 
-        // console.log('[DanmuList] Raw danmaku event payload:', event.payload);
-        let parsedMessage: CommonDanmakuMessage | null = null;
-        const platform = getCurrentPlatform(); // Get current platform to select parser
 
-        if (platform === 'douyu') {
-          parsedMessage = parseDouyuDanmakuMessage(event.payload);
-        } 
-        // else if (platform === 'bilibili') {
-        //   parsedMessage = parseBilibiliDanmakuMessage(event.payload);
-        // }
-        // Add other platforms here
-
-        if (parsedMessage) {
-          // Filter which message types to display in the list
-          if (parsedMessage.type === 'chat' || parsedMessage.type === 'enter') {
-            danmakuList.value.push(parsedMessage);
-            if (danmakuList.value.length > 300) {
-              danmakuList.value.shift();
-            }
-            scrollToBottom();
-          } else if (parsedMessage.type === 'gift'){
-            // console.log('[DanmuList] Gift event:', parsedMessage);
-            // Optionally handle gift messages differently (e.g., display in a separate area or a special format)
-            // For now, we can push them to the list too, or filter them out
-             danmakuList.value.push(parsedMessage); // Example: also show gifts in list
-             if (danmakuList.value.length > 300) danmakuList.value.shift();
-             scrollToBottom();
-          }
-        } else {
-          // console.warn('[DanmuList] Failed to parse danmaku message or unhandled type:', event.payload);
-        }
-      });
-      console.log('[DanmuList] Successfully listening for danmaku messages on room:', currentRoomId);
-    } catch (error) {
-      console.error('[DanmuList] Failed to start or set up danmaku listener for room:', currentRoomId, error);
-      currentRoomId = null;
-    }
-  };
-  
-  const cleanupListener = () => {
-    if (unlistenDanmaku) {
-      console.log('[DanmuList] Cleaning up danmaku listener.');
-      unlistenDanmaku();
-      unlistenDanmaku = null;
-    }
-    if (currentRoomId) {
-      // It might be good to also tell the backend to stop sending messages for this room if not handled by start_danmaku_listener itself
-      // invoke('stop_danmaku_listener', { roomId: currentRoomId }).catch(e => console.error('Error stopping listener:', e));
-      console.log('[DanmuList] Signalling backend to stop for room:', currentRoomId);
-    }
-    currentRoomId = null;
-    danmakuList.value = []; // Clear messages when listener is cleaned up or room becomes null
-  };
-  
-  onMounted(() => {
-    console.log('[DanmuList] Mounted. Initial Room ID:', props.roomId);
-    if (props.roomId) {
-      setupDanmakuListener(props.roomId);
+  watch(autoScroll, (newValue) => {
+    if (newValue) {
+      userScrolled.value = false;
+      scrollToBottom();
     }
   });
   
-  watch(() => props.roomId, (newRoomId, oldRoomId) => {
-    console.log('[DanmuList] Room ID changed from', oldRoomId, 'to', newRoomId);
-    if (newRoomId && newRoomId !== oldRoomId) {
-      setupDanmakuListener(newRoomId);
-    } else if (!newRoomId) {
-      cleanupListener();
+  // Watch the messages prop to scroll to bottom when new messages arrive
+  watch(() => props.messages, (newMessages, oldMessages) => {
+    if (newMessages && oldMessages && newMessages.length > oldMessages.length) {
+      scrollToBottom();
     }
-  }, { immediate: false }); // immediate: true could be problematic if component setup order is an issue
-  
-  onUnmounted(() => {
-    console.log('[DanmuList] Unmounted. Cleaning up listener.');
-    cleanupListener();
+  }, { deep: true }); // deep watch might be needed if individual message objects change, though length check is often enough
+
+  // Watch for roomId changes to clear scroll state if needed (though messages prop handles data)
+  watch(() => props.roomId, () => {
+      userScrolled.value = false; // Reset scroll state on room change
+      autoScroll.value = true; // Default to auto scroll for new room
+      nextTick(() => {
+        if (danmakuListEl.value) danmakuListEl.value.scrollTop = 0; // Scroll to top for new room, then auto-scroll will take over if messages come in
+        scrollToBottom(); // Attempt to scroll to bottom immediately if there are messages for the new room
+      });
   });
   
   </script>
