@@ -32,6 +32,7 @@ pub struct LiveStreamInfo {
     pub anchor_name: Option<String>,
     pub avatar: Option<String>,
     pub stream_url: Option<String>,
+    pub status: Option<i32>,
     pub error_message: Option<String>,
 }
 

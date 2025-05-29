@@ -21,6 +21,7 @@ use platforms::douyin::generate_douyin_ms_token;
 use platforms::douyin::fetch_douyin_partition_rooms;
 use platforms::douyin::get_douyin_live_stream_url;
 use platforms::douyin::start_douyin_danmu_listener;
+use platforms::douyin::fetch_douyin_room_info;
 use platforms::common::DouyinDanmakuState;
 // get_stream_url and search_anchor will be directly available via platforms::douyu now
 
@@ -166,7 +167,8 @@ fn main() {
             fetch_three_cate,
             generate_douyin_ms_token,
             fetch_douyin_partition_rooms,
-            get_douyin_live_stream_url
+            get_douyin_live_stream_url,
+            fetch_douyin_room_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

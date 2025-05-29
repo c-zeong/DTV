@@ -52,6 +52,7 @@ export interface StreamerDetails {
   isReplay?: boolean; // Optional, as not all platforms might explicitly state this
   categoryName?: string;
   viewerCount?: number;
+  errorMessage?: string | null; // Add optional errorMessage field
   // Add any other fields commonly used by UI components
 }
 
@@ -110,6 +111,7 @@ export interface LiveStreamInfo {
   anchor_name?: string | null; // Douyin uses this
   avatar?: string | null;      // Douyin uses this
   stream_url?: string | null;
+  status?: number | null; // Add status field, consistent with Rust struct
   error_message?: string | null;
   // Potentially other platform-specific fields if not covered by StreamRoomDetails
 } 

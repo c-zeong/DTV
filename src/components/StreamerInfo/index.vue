@@ -312,6 +312,7 @@
     title?: string | null
     anchorName?: string | null
     avatar?: string | null
+    isLive?: boolean | null
   }>()
   
   const roomDetails = ref<StreamerDetails | null>(null)
@@ -323,7 +324,12 @@
   const computedNickname = computed(() => roomDetails.value?.nickname ?? props.anchorName ?? '主播昵称加载中...')
   const avatarUrl = computed(() => roomDetails.value?.avatarUrl ?? props.avatar ?? null)
   const computedViewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
-  const computedIsLive = computed(() => roomDetails.value?.isLive ?? false)
+  const computedIsLive = computed(() => {
+    if (props.isLive !== undefined && props.isLive !== null) {
+      return props.isLive;
+    }
+    return roomDetails.value?.isLive ?? false;
+  })
   const computedCategoryName = computed(() => roomDetails.value?.categoryName ?? 'N/A')
   
   const isFollowing = computed(() => props.isFollowed)
@@ -348,25 +354,33 @@
   })
   
   const fetchRoomDetails = async () => {
-    console.log(`[StreamerInfo] Fetching details for ${props.platform}/${props.roomId}`)
-    isLoading.value = true
-    error.value = null
-    roomDetails.value = null // Clear previous details
-    showAvatarText.value = false
+    // For Douyin, we expect parent components like DouyinPlayerView to provide all necessary details via props.
+    // So, StreamerInfo should not fetch them again for Douyin platform.
+    if (props.platform === Platform.DOUYIN) {
+      console.log('[StreamerInfo] Platform is Douyin. Skipping fetch, relying on props for details.');
+      // Ensure avatar fallback logic is re-evaluated based on current props
+      showAvatarText.value = !props.avatar;
+      // Ensure isLoading is false if we skip fetching
+      isLoading.value = false;
+      // If roomDetails was populated by a previous fetch (e.g. different room/platform), clear it 
+      // so computed properties correctly fall back to current props.
+      roomDetails.value = null;
+      return; // Explicitly return to prevent further execution for Douyin
+    }
+
+    // Original fetching logic for other platforms (e.g., Douyu)
+    console.log(`[StreamerInfo] Fetching details for ${props.platform}/${props.roomId}`);
+    isLoading.value = true;
+    error.value = null;
+    roomDetails.value = null; // Clear previous details
+    showAvatarText.value = false;
 
     try {
       if (props.platform === Platform.DOUYU) {
-        roomDetails.value = await fetchDouyuStreamerDetails(props.roomId)
-      } else if (props.platform === Platform.DOUYIN) {
-        roomDetails.value = getDouyinStreamerDetails({
-          roomId: props.roomId,
-          title: props.title,
-          anchorName: props.anchorName,
-          avatar: props.avatar,
-        })
+        roomDetails.value = await fetchDouyuStreamerDetails(props.roomId);
       } else {
-        console.warn(`[StreamerInfo] Unsupported platform: ${props.platform}`)
-        throw new Error(`Unsupported platform: ${props.platform}`)
+        console.warn(`[StreamerInfo] Unsupported platform: ${props.platform}`);
+        throw new Error(`Unsupported platform: ${props.platform}`);
       }
 
       // Fallback for avatar after attempting to load details
@@ -419,18 +433,18 @@
   // However, the current getDouyinStreamerDetails re-evaluates based on props passed to it,
   // and fetchRoomDetails is called on platform change. If title/anchorName/avatar for Douyin
   // can change *while the component is mounted for the same Douyin room*, this watch might be useful.
-  watch(() => [props.title, props.anchorName, props.avatar], (newValues, oldValues) => {
+  watch(() => [props.title, props.anchorName, props.avatar], async (newValues, oldValues) => {
     if (props.platform === Platform.DOUYIN) {
       // If any of these props change for an active Douyin streamer, re-evaluate roomDetails.
       // This avoids a full "fetch" but updates the locally constructed details.
       const hasChanged = newValues.some((val, index) => val !== oldValues[index])
       if (hasChanged) {
         console.log('[StreamerInfo] Douyin props (title, anchorName, or avatar) changed, re-evaluating Douyin details.')
-        roomDetails.value = getDouyinStreamerDetails({
+        roomDetails.value = await getDouyinStreamerDetails({
           roomId: props.roomId,
-          title: props.title,
-          anchorName: props.anchorName,
-          avatar: props.avatar,
+          initialTitle: props.title,
+          initialAnchorName: props.anchorName,
+          initialAvatar: props.avatar,
         })
         // Handle avatar fallback logic again if avatarUrl might have changed
         showAvatarText.value = !avatarUrl.value

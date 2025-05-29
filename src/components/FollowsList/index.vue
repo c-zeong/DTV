@@ -86,15 +86,13 @@
   import { Platform } from '../../platforms/common/types';
   import type { DouyuRoomInfo } from '../../platforms/douyu/types';
   
-  // Placeholder for Douyin room info, adjust as needed
-  interface DouyinRoomInfo {
-    room?: {
-      room_id_str?: string; 
-      nickname?: string;
-      room_name?: string; 
-      avatar_url?: string; 
-      status?: number; // 0 for offline, 2 for live (typical for Douyin API)
-    };
+  // Updated DouyinRoomInfo to match the Rust struct DouyinFollowListRoomInfo
+  interface DouyinRoomInfo { // This will be the type for `data` from invoke
+    room_id_str: string;
+    nickname: string;
+    room_name: string; 
+    avatar_url: string; 
+    status: number; // 2 for live (as per get_douyin_live_stream_url behavior)
   }
   
   const props = defineProps<{
@@ -232,27 +230,37 @@
               const data = await invoke<DouyuRoomInfo>('fetch_douyu_room_info', { 
                 roomId: streamer.id
               });
-              if (data.room) {
-                const showStatus = Number(data.room.show_status);
-                const videoLoop = Number(data.room.videoLoop);
+              if (data && data.room_id) {
+                const showStatus = Number(data.show_status);
+                const videoLoop = Number(data.videoLoop);
                 updatedStreamerData = {
                   isLive: showStatus === 1 && videoLoop !== 1,
-                  nickname: data.room.nickname || streamer.nickname,
-                  roomTitle: data.room.room_name || streamer.roomTitle,
-                  avatarUrl: data.room.avatar_mid || streamer.avatarUrl,
+                  nickname: data.nickname || streamer.nickname,
+                  roomTitle: data.room_name || streamer.roomTitle,
+                  avatarUrl: data.avatar_mid || streamer.avatarUrl,
                 };
+              } else {
+                console.warn(`[FollowsList] Received no/invalid data for Douyu room ${streamer.id}`, data);
               }
             } else if (streamer.platform === Platform.DOUYIN) {
+              // Use the new command and expect the flat DouyinRoomInfo structure
+              // Pass `liveId` as the parameter name to match Rust command if it was live_id
+              // Assuming streamer.id for Douyin followed items is the `live_id` (e.g., username or original ID)
               const data = await invoke<DouyinRoomInfo>('fetch_douyin_room_info', { 
-                roomId: streamer.id 
+                liveId: streamer.id 
               });
-              if (data.room) {
+              
+              // Check if data is valid and has expected properties (flat structure)
+              if (data && data.room_id_str) { 
                 updatedStreamerData = {
-                  isLive: data.room.status === 2, 
-                  nickname: data.room.nickname || streamer.nickname,
-                  roomTitle: data.room.room_name || streamer.roomTitle,
-                  avatarUrl: data.room.avatar_url || streamer.avatarUrl,
+                  isLive: data.status === 2, // Douyin: status 2 means live
+                  nickname: data.nickname || streamer.nickname,
+                  roomTitle: data.room_name || streamer.roomTitle, // data.room_name is the title
+                  avatarUrl: data.avatar_url || streamer.avatarUrl,
+                  // id: data.room_id_str, // Keep streamer.id as the primary key for followed item if it's the live_id
                 };
+              } else {
+                console.warn(`[FollowsList] Received no/invalid data for Douyin room ${streamer.id}`, data);
               }
             } else {
               console.warn(`Unsupported platform for refresh: ${streamer.platform}`);

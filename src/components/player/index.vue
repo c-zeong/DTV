@@ -45,6 +45,7 @@
             :anchor-name="props.anchorName"
             :avatar="props.avatar"
             :is-followed="props.isFollowed"
+            :is-live="props.isLive"
             @follow="$emit('follow', $event)"
             @unfollow="$emit('unfollow', $event)"
             class="streamer-info"
@@ -90,6 +91,7 @@ const props = defineProps<{
   title?: string | null;
   anchorName?: string | null;
   avatar?: string | null;
+  isLive?: boolean | null;
 }>();
 
 const emit = defineEmits<{

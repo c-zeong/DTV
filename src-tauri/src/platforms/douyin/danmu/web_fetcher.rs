@@ -1,5 +1,6 @@
 use reqwest::cookie::Jar;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use regex::Regex;
 use std::sync::Arc;
@@ -8,6 +9,16 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 use super::signature; // Assuming signature.rs is in the same directory (src)
+
+// New struct for frontend
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DouyinFollowListRoomInfo {
+    pub room_id_str: String,
+    pub nickname: String,
+    pub room_name: String, // Title of the room
+    pub avatar_url: String,
+    pub status: i32, // 0 for live, other values indicate not live or error
+}
 
 pub struct DouyinLiveWebFetcher {
     pub live_id: String,
@@ -95,8 +106,8 @@ impl DouyinLiveWebFetcher {
 
         let url = format!(
             "https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=1536&screen_height=864&browser_language=zh-CN&browser_platform=Win32&browser_name=Edge&browser_version=133.0.0.0&web_rid={}&room_id_str={}&enter_source=&is_need_double_stream=false&insert_task_id=&live_reason=&msToken=&a_bogus=",
-            self.live_id,
-            room_id_val
+            self.live_id, // web_rid should be self.live_id (which is the original ID from URL, e.g. username or a numerical ID)
+            room_id_val // room_id_str is the actual numerical room ID
         );
 
         let response = self.http_client.get(&url)
@@ -107,23 +118,29 @@ impl DouyinLiveWebFetcher {
 
         let data: serde_json::Value = response.json().await?;
 
-        if let Some(room_data) = data.get("data") {
-            let room_status_val = room_data.get("room_status").and_then(|s| s.as_i64());
-            if let Some(user_data) = room_data.get("user") {
-                let user_id = user_data.get("id_str").and_then(|s| s.as_str());
-                let nickname = user_data.get("nickname").and_then(|s| s.as_str());
+        // This part is mostly for printing/debugging in the original code
+        if let Some(room_data_top) = data.get("data") { // Douyin API often has a nested "data" field for room details
+            if let Some(room_info) = room_data_top.get("room") { // Actual room details are often in a "room" sub-object
+                let room_status_val = room_info.get("status").and_then(|s| s.as_i64());
+                // User data is often in an "owner" sub-object of "room"
+                if let Some(user_data) = room_info.get("owner") { 
+                    let user_id = user_data.get("id_str").and_then(|s| s.as_str());
+                    let nickname = user_data.get("nickname").and_then(|s| s.as_str());
 
-                if let (Some(status), Some(id), Some(nick)) = (room_status_val, user_id, nickname) {
-                    let status_text = if status == 0 { "正在直播" } else { "已结束" };
-                    println!("【{}】[{}]直播间：{}.", nick, id, status_text);
+                    if let (Some(status), Some(id), Some(nick)) = (room_status_val, user_id, nickname) {
+                        let status_text = if status == 0 { "正在直播" } else { "已结束" };
+                        println!("【{}】[{}]直播间：{}.", nick, id, status_text);
+                    } else {
+                        println!("【X】无法解析直播间信息的部分字段 (status, id, nick)");
+                    }
                 } else {
-                    println!("【X】无法解析直播间信息的部分字段");
+                    println!("【X】未找到用户信息 (owner data in room_data.room)");
                 }
             } else {
-                println!("【X】未找到用户信息 (user data)");
+                 println!("【X】未找到房间信息 (room object in room_data_top)");
             }
         } else {
-            println!("【X】未找到房间数据 (room data)");
+            println!("【X】未找到顶层房间数据 (data object in response)");
         }
         Ok(())
     }
@@ -139,4 +156,73 @@ impl DouyinLiveWebFetcher {
     //     println!("Connect_websocket logic will be moved elsewhere.");
     //     Ok(())
     // }
+}
+
+// New Tauri command
+#[tauri::command]
+pub async fn fetch_douyin_room_info(live_id: String) -> Result<DouyinFollowListRoomInfo, String> {
+    println!("[fetch_douyin_room_info] Fetching details for live_id: {}", live_id);
+    let mut fetcher = DouyinLiveWebFetcher::new(&live_id)
+        .map_err(|e| format!("Failed to create DouyinLiveWebFetcher: {}", e))?;
+
+    let ttwid = fetcher.get_ttwid().await.map_err(|e| format!("Failed to get ttwid: {}", e))?;
+    let room_id_str = fetcher.get_room_id().await.map_err(|e| format!("Failed to get room_id: {}", e))?;
+    
+    // Construct the URL for the web/enter endpoint
+    let url = format!(
+        "https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=1536&screen_height=864&browser_language=zh-CN&browser_platform=Win32&browser_name=Edge&browser_version=133.0.0.0&web_rid={}&room_id_str={}&enter_source=&is_need_double_stream=false&insert_task_id=&live_reason=&msToken=&a_bogus=",
+        live_id, // web_rid (this should be the original live_id from input)
+        room_id_str // room_id_str (the numerical one we fetched)
+    );
+
+    let response = fetcher.http_client.get(&url)
+        .header("User-Agent", &fetcher.user_agent)
+        .header("Cookie", format!("ttwid={};", ttwid))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request to web/enter: {}", e))?;
+
+    let response_text = response.text().await.map_err(|e| format!("Failed to get response text: {}", e))?;
+    // println!("[fetch_douyin_room_info] Response text: {}", response_text);
+    let data: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse JSON from web/enter: {}. Response text: {}", e, response_text))?;
+
+    // Parse data based on typical Douyin API structure
+    let room_data_top = data.get("data").ok_or_else(|| "Missing 'data' field in response".to_string())?;
+    let room_info = room_data_top.get("room").ok_or_else(|| "Missing 'room' field in data".to_string())?;
+    let owner_info = room_info.get("owner").ok_or_else(|| "Missing 'owner' field in room data".to_string())?;
+
+    let nickname = owner_info.get("nickname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let avatar_url = owner_info.get("avatar_thumb")
+        .and_then(|v| v.get("url_list"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.get(0))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let room_name = room_info.get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let status_val = room_info.get("status")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(4) as i32; // Default to 4 (not live) if not found or parsing fails
+
+    if nickname.is_empty() && room_name.is_empty() {
+        return Err(format!("Failed to extract critical info (nickname/room_name empty). Parsed status: {}. Room ID: {}", status_val, room_id_str));
+    }
+
+    Ok(DouyinFollowListRoomInfo {
+        room_id_str: room_id_str.clone(), // Use the fetched numerical room_id_str
+        nickname,
+        room_name,
+        avatar_url,
+        status: status_val, // status 0 means live
+    })
 }

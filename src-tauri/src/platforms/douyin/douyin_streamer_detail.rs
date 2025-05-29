@@ -25,7 +25,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
 
     if room_id_str.is_empty() {
         return Ok(crate::platforms::common::LiveStreamInfo {
-            title: None, anchor_name: None, avatar: None, stream_url: None,
+            title: None, anchor_name: None, avatar: None, stream_url: None, status: None,
             error_message: Some("Room ID cannot be empty.".to_string()),
         });
     }
@@ -36,7 +36,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
 
     if let Err(e) = setup_douyin_cookies(&mut http_client, &room_id_str).await {
         return Ok(crate::platforms::common::LiveStreamInfo {
-            title: None, anchor_name: None, avatar: None, stream_url: None,
+            title: None, anchor_name: None, avatar: None, stream_url: None, status: None,
             error_message: Some(format!("Cookie setup failed: {}", e)),
         });
     }
@@ -57,7 +57,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
             let raw_error_text = http_client.get_text(&api_url).await.unwrap_or_else(|_| "Failed to get raw error text".to_string());
             println!("[Douyin Live RS] API request failed. Raw error text (if any): {}", raw_error_text);
             return Ok(crate::platforms::common::LiveStreamInfo {
-                title: None, anchor_name: None, avatar: None, stream_url: None,
+                title: None, anchor_name: None, avatar: None, stream_url: None, status: None,
                 error_message: Some(format!("API request failed: {}. URL: {}", e, api_url)),
             });
         }
@@ -73,7 +73,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
         let prompts = api_response.data.as_ref().and_then(|d| d.prompts.as_ref()).cloned()
             .unwrap_or_else(|| "Unknown API error".to_string());
         return Ok(crate::platforms::common::LiveStreamInfo {
-            title: None, anchor_name: None, avatar: None, stream_url: None,
+            title: None, anchor_name: None, avatar: None, stream_url: None, status: None,
             error_message: Some(format!("API error (status_code: {}): {}", api_response.status_code, prompts)),
         });
     }
@@ -81,7 +81,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
     let main_data = match api_response.data {
         Some(d) => d,
         None => return Ok(crate::platforms::common::LiveStreamInfo { 
-            title: None, anchor_name: None, avatar: None, stream_url: None, 
+            title: None, anchor_name: None, avatar: None, stream_url: None, status: None,
             error_message: Some("API response contained no main 'data' object".to_string())
         }),
     };
@@ -90,13 +90,16 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
         .and_then(|data_vec| data_vec.first())
         .ok_or_else(|| "No room data entry (data.data[0]) found in API response".to_string())?;
 
+    let current_status = room_data_entry.status;
+
     if room_data_entry.status != 2 && room_data_entry.status != 4 { 
         return Ok(crate::platforms::common::LiveStreamInfo {
             title: room_data_entry.title.clone(),
             anchor_name: main_data.user.as_ref().and_then(|u| u.nickname.clone()),
             avatar: main_data.user.as_ref().and_then(|u| u.avatar_thumb.as_ref()).and_then(|at| at.url_list.as_ref()).and_then(|ul| ul.first().cloned()),
             stream_url: None,
-            error_message: Some(format!("Stream is not live or replay (status: {}).", room_data_entry.status)),
+            status: Some(current_status),
+            error_message: Some(format!("Stream is not live or replay (status: {}).", current_status)),
         });
     }
 
@@ -165,6 +168,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
             .and_then(|at| at.url_list.as_ref())
             .and_then(|ul| ul.first().cloned()),
         stream_url: final_stream_url,
+        status: Some(current_status),
         error_message: None,
     })
 }
