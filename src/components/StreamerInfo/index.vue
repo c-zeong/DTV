@@ -2,16 +2,16 @@
     <div class="streamer-info">
       <div class="streamer-layout">
         <div class="avatar-wrapper">
-          <img v-if="avatarUrl && !showAvatarText" :src="avatarUrl" :alt="nickname" @error="handleAvatarError" class="avatar-img">
-          <div v-else class="avatar-fallback">{{ nickname.charAt(0).toUpperCase() }}</div>
+          <img v-if="avatarUrl && !showAvatarText" :src="avatarUrl" :alt="computedNickname" @error="handleAvatarError" class="avatar-img">
+          <div v-else class="avatar-fallback">{{ computedNickname.charAt(0).toUpperCase() }}</div>
         </div>
   
         <div class="streamer-details-main">
-          <h3 class="room-title" :title="roomTitle">{{ roomTitle }}</h3>
+          <h3 class="room-title" :title="computedRoomTitle">{{ computedRoomTitle }}</h3>
           <div class="streamer-meta-row">
-            <span class="streamer-name">{{ nickname }}</span>
+            <span class="streamer-name">{{ computedNickname }}</span>
             <span :class="['status-tag', statusClass]">{{ getStatusText }}</span>
-            <span v-if="viewerCount > 0" class="viewers-tag">
+            <span v-if="computedViewerCount > 0" class="viewers-tag">
               <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3s3-1.34 3-3s-1.34-3-3-3"/></svg>
               {{ formattedViewerCount }}
             </span>
@@ -294,16 +294,14 @@
   </style>
   
   <script setup lang="ts">
-  import { ref, computed, onMounted, watch, toRefs } from 'vue'
-  import { invoke } from '@tauri-apps/api/core'
+  import { ref, computed, onMounted, watch } from 'vue'
   import { Platform } from '../../platforms/common/types'
   import type { StreamerDetails } from '../../platforms/common/types'
-  // import { parseDouyuRoomDataToStreamerDetails } from '../../platforms/douyu/parsers' // Ensure this is removed or commented out
-  
-  const MAX_FETCH_ATTEMPTS = 3
+  import { fetchDouyuStreamerDetails } from '../../platforms/douyu/streamerInfoParser'
+  import { getDouyinStreamerDetails } from '../../platforms/douyin/streamerInfoParser'
   
   const emit = defineEmits<{
-    (e: 'follow', data: { id: string; platform: Platform; nickname: string; avatarUrl: string; roomTitle?: string }): void
+    (e: 'follow', data: { id: string; platform: Platform; nickname: string; avatarUrl: string | null; roomTitle?: string }): void
     (e: 'unfollow', roomId: string): void
   }>()
   
@@ -321,98 +319,65 @@
   const error = ref<string | null>(null)
   const showAvatarText = ref(false)
   
-  const roomTitle = computed(() => props.title ?? roomDetails.value?.roomTitle ?? '直播间标题加载中...')
-  const nickname = computed(() => props.anchorName ?? roomDetails.value?.nickname ?? '主播昵称加载中...')
-  const avatarUrl = computed(() => props.avatar ?? roomDetails.value?.avatarUrl ?? null)
-  const viewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
-  const isLive = computed(() => roomDetails.value?.isLive ?? false)
-  const categoryName = computed(() => roomDetails.value?.categoryName ?? 'N/A')
+  const computedRoomTitle = computed(() => roomDetails.value?.roomTitle ?? props.title ?? '直播间标题加载中...')
+  const computedNickname = computed(() => roomDetails.value?.nickname ?? props.anchorName ?? '主播昵称加载中...')
+  const avatarUrl = computed(() => roomDetails.value?.avatarUrl ?? props.avatar ?? null)
+  const computedViewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
+  const computedIsLive = computed(() => roomDetails.value?.isLive ?? false)
+  const computedCategoryName = computed(() => roomDetails.value?.categoryName ?? 'N/A')
   
   const isFollowing = computed(() => props.isFollowed)
   
   const statusClass = computed(() => {
-    if (isLive.value) return 'live'
+    if (computedIsLive.value) return 'live'
     return 'offline'
   })
   
   const getStatusText = computed(() => {
     if (error.value) return '信息加载失败'
-    if (isLive.value) return '直播中'
+    if (computedIsLive.value) return '直播中'
     return '未开播'
   })
   
   const formattedViewerCount = computed(() => {
-    if (viewerCount.value >= 10000) {
-      return (viewerCount.value / 10000).toFixed(1) + '万'
+    const count = computedViewerCount.value
+    if (count >= 10000) {
+      return (count / 10000).toFixed(1) + '万'
     }
-    return viewerCount.value.toString()
+    return count.toString()
   })
   
   const fetchRoomDetails = async () => {
-    if (props.platform === Platform.DOUYIN && props.title && props.anchorName && props.avatar) {
-      console.log('[StreamerInfo] Douyin platform: Using details from props.')
-      if (!avatarUrl.value) showAvatarText.value = true
-      isLoading.value = false
-      return
-    }
     console.log(`[StreamerInfo] Fetching details for ${props.platform}/${props.roomId}`)
     isLoading.value = true
     error.value = null
+    roomDetails.value = null // Clear previous details
+    showAvatarText.value = false
+
     try {
-      const rawDetails = await invoke<any>('fetch_douyu_room_info', { roomId: props.roomId });
-      
       if (props.platform === Platform.DOUYU) {
-        const roomData = rawDetails.data?.room ?? rawDetails.room ?? rawDetails.data ?? rawDetails;
-
-        if (!roomData || Object.keys(roomData).length === 0) {
-          console.error('[StreamerInfo] Douyu rawDetails or roomData is empty/undefined:', rawDetails);
-          throw new Error('Received empty room data from API');
-        }
-        
-        const showStatus = Number(roomData.show_status);
-        const videoLoop = Number(roomData.videoLoop ?? roomData.video_loop ?? 0);
-        const isReallyLive = showStatus === 1 && videoLoop !== 1;
-
-        roomDetails.value = {
-          roomId: props.roomId,
-          platform: 'douyu', // Ensure string literal 'douyu' is used
-          nickname: roomData.nickname || 'N/A',
-          roomTitle: roomData.room_name || roomData.roomName || 'N/A',
-          avatarUrl: roomData.avatar_mid || roomData.avatar || roomData.owner_avatar || null,
-          isLive: isReallyLive,
-          viewerCount: Number(roomData.hn || roomData.online_num || roomData.onlineNum || 0),
-          categoryName: roomData.cate2_name || roomData.cate_name || roomData.game_name || 'N/A',
-        };
+        roomDetails.value = await fetchDouyuStreamerDetails(props.roomId)
       } else if (props.platform === Platform.DOUYIN) {
-        // Placeholder for Douyin direct prop usage or future Douyin-specific API call
-        // For now, if details come from props (handled at the start of function), this block might not be hit
-        // If a Douyin specific API call is made here in the future, map it similarly.
-        // Example if rawDetails were from a Douyin API:
-        // roomDetails.value = {
-        //   roomId: props.roomId,
-        //   platform: 'douyin', 
-        //   nickname: rawDetails.nickname || 'N/A',
-        //   // ... other Douyin specific fields
-        // };
-        // For now, we assume Douyin details are passed via props and handled earlier.
-        // If fetch_douyu_room_info is mistakenly called for Douyin, it would be an error.
-        // The initial check `props.platform === Platform.DOUYIN && props.title ...` handles prop-based data for Douyin.
-        // If execution reaches here for Douyin, it implies an API call was made, which is not currently the case
-        // for Douyin in this function (it uses props). If `fetch_douyu_room_info` *could* return Douyin data,
-        // we'd need a specific parser here.
-        console.warn('[StreamerInfo] Reached Douyin processing block after API call. Ensure this is intended and data is Douyin-specific.');
-        // Fallback or specific parsing for Douyin if rawDetails came from an API for Douyin
-        roomDetails.value = rawDetails as StreamerDetails; // This is likely incorrect if rawDetails structure is unknown for Douyin API
+        roomDetails.value = getDouyinStreamerDetails({
+          roomId: props.roomId,
+          title: props.title,
+          anchorName: props.anchorName,
+          avatar: props.avatar,
+        })
       } else {
-        console.warn(`[StreamerInfo] fetch_douyu_room_info was called for an unhandled platform: ${props.platform}. Ensure this is intended.`);
-        roomDetails.value = rawDetails as StreamerDetails; 
+        console.warn(`[StreamerInfo] Unsupported platform: ${props.platform}`)
+        throw new Error(`Unsupported platform: ${props.platform}`)
       }
 
-      if (!avatarUrl.value) showAvatarText.value = true
+      // Fallback for avatar after attempting to load details
+      if (!avatarUrl.value) {
+        showAvatarText.value = true
+      }
+
     } catch (e: any) {
-      console.error(`[StreamerInfo] Error fetching room details for ${props.roomId}:`, e)
+      console.error(`[StreamerInfo] Error in fetchRoomDetails for ${props.platform}/${props.roomId}:`, e)
       error.value = e.message || 'Failed to load streamer details'
-      showAvatarText.value = true
+      showAvatarText.value = true // Show fallback if any error occurs
     } finally {
       isLoading.value = false
     }
@@ -425,9 +390,9 @@
       const followData = {
         id: props.roomId,
         platform: props.platform,
-        nickname: nickname.value === '主播昵称加载中...' ? props.roomId : nickname.value,
-        avatarUrl: avatarUrl.value ?? '',
-        roomTitle: roomTitle.value === '直播间标题加载中...' ? undefined : roomTitle.value,
+        nickname: computedNickname.value === '主播昵称加载中...' ? props.roomId : computedNickname.value,
+        avatarUrl: avatarUrl.value,
+        roomTitle: computedRoomTitle.value === '直播间标题加载中...' ? undefined : computedRoomTitle.value,
       }
       emit('follow', followData)
     }
@@ -442,4 +407,35 @@
     fetchRoomDetails()
   })
   
+  // Watch for prop changes to re-fetch details if roomId or platform changes
+  watch(() => [props.roomId, props.platform], (newValues, oldValues) => {
+    if (newValues[0] !== oldValues[0] || newValues[1] !== oldValues[1]) {
+      console.log('[StreamerInfo] Props (roomId or platform) changed, re-fetching details.')
+      fetchRoomDetails()
+    }
+  }, { deep: true }) // Use deep watch if props might be objects, though roomId/platform are primitives
+
+  // Watch for direct prop changes for Douyin that might update details without a full fetch, if needed.
+  // However, the current getDouyinStreamerDetails re-evaluates based on props passed to it,
+  // and fetchRoomDetails is called on platform change. If title/anchorName/avatar for Douyin
+  // can change *while the component is mounted for the same Douyin room*, this watch might be useful.
+  watch(() => [props.title, props.anchorName, props.avatar], (newValues, oldValues) => {
+    if (props.platform === Platform.DOUYIN) {
+      // If any of these props change for an active Douyin streamer, re-evaluate roomDetails.
+      // This avoids a full "fetch" but updates the locally constructed details.
+      const hasChanged = newValues.some((val, index) => val !== oldValues[index])
+      if (hasChanged) {
+        console.log('[StreamerInfo] Douyin props (title, anchorName, or avatar) changed, re-evaluating Douyin details.')
+        roomDetails.value = getDouyinStreamerDetails({
+          roomId: props.roomId,
+          title: props.title,
+          anchorName: props.anchorName,
+          avatar: props.avatar,
+        })
+        // Handle avatar fallback logic again if avatarUrl might have changed
+        showAvatarText.value = !avatarUrl.value
+      }
+    }
+  })
+
   </script>

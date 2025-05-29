@@ -82,8 +82,20 @@
   <script setup lang="ts">
   import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
   import { invoke } from '@tauri-apps/api/core';
-  import type { FollowedStreamer } from '../../../platforms/common/types';
-  import type { DouyuRoomInfo } from '../../../platforms/douyu/types';
+  import type { FollowedStreamer } from '../../platforms/common/types';
+  import { Platform } from '../../platforms/common/types';
+  import type { DouyuRoomInfo } from '../../platforms/douyu/types';
+  
+  // Placeholder for Douyin room info, adjust as needed
+  interface DouyinRoomInfo {
+    room?: {
+      room_id_str?: string; 
+      nickname?: string;
+      room_name?: string; 
+      avatar_url?: string; 
+      status?: number; // 0 for offline, 2 for live (typical for Douyin API)
+    };
+  }
   
   const props = defineProps<{
     followedAnchors: FollowedStreamer[]
@@ -91,7 +103,7 @@
   
   const emit = defineEmits<{
     (e: 'selectAnchor', streamer: FollowedStreamer): void;
-    (e: 'unfollow', payload: { platform: any, id: string }): void;
+    (e: 'unfollow', payload: { platform: Platform, id: string }): void; // Ensure Platform type is used here if not already
     (e: 'reorderList', newList: FollowedStreamer[]): void;
   }>();
   
@@ -214,34 +226,64 @@
       const updates = await Promise.all(
         props.followedAnchors.map(async (streamer) => {
           try {
-            const data = await invoke<DouyuRoomInfo>('fetch_douyu_room_info', { 
-              roomId: streamer.id
-            });
-            
-            if (data.room) {
-              const showStatus = Number(data.room.show_status);
-              const videoLoop = Number(data.room.videoLoop);
-              const isReallyLive = showStatus === 1 && videoLoop !== 1;
-              return {
-                ...streamer,
-                isLive: isReallyLive,
-                nickname: data.room.nickname || streamer.nickname,
-                roomTitle: data.room.room_name || streamer.roomTitle,
-                avatarUrl: data.room.avatar_mid || streamer.avatarUrl,
-              } as FollowedStreamer;
+            let updatedStreamerData: Partial<FollowedStreamer> = {};
+
+            if (streamer.platform === Platform.DOUYU) {
+              const data = await invoke<DouyuRoomInfo>('fetch_douyu_room_info', { 
+                roomId: streamer.id
+              });
+              if (data.room) {
+                const showStatus = Number(data.room.show_status);
+                const videoLoop = Number(data.room.videoLoop);
+                updatedStreamerData = {
+                  isLive: showStatus === 1 && videoLoop !== 1,
+                  nickname: data.room.nickname || streamer.nickname,
+                  roomTitle: data.room.room_name || streamer.roomTitle,
+                  avatarUrl: data.room.avatar_mid || streamer.avatarUrl,
+                };
+              }
+            } else if (streamer.platform === Platform.DOUYIN) {
+              const data = await invoke<DouyinRoomInfo>('fetch_douyin_room_info', { 
+                roomId: streamer.id 
+              });
+              if (data.room) {
+                updatedStreamerData = {
+                  isLive: data.room.status === 2, 
+                  nickname: data.room.nickname || streamer.nickname,
+                  roomTitle: data.room.room_name || streamer.roomTitle,
+                  avatarUrl: data.room.avatar_url || streamer.avatarUrl,
+                };
+              }
+            } else {
+              console.warn(`Unsupported platform for refresh: ${streamer.platform}`);
+              return streamer; 
             }
-            return streamer;
+
+            return {
+              ...streamer,
+              ...updatedStreamerData,
+            } as FollowedStreamer;
+
           } catch (e) {
-            console.error(`Failed to refresh streamer ${streamer.id}:`, e);
-            return streamer;
+            console.error(`Failed to refresh streamer ${streamer.platform}/${streamer.id}:`, e);
+            return streamer; 
           }
         })
       );
-  
-      const validUpdates = updates.filter((update): update is FollowedStreamer => update !== null);
+
+      const validUpdates = updates.filter((update: FollowedStreamer | undefined): update is FollowedStreamer => !!update && typeof update.id !== 'undefined');
       
       if (validUpdates.length > 0) {
-        emit('reorderList', validUpdates);
+        const hasChanged = JSON.stringify(validUpdates) !== JSON.stringify(
+          props.followedAnchors.map((s: FollowedStreamer) => {
+            const updated = validUpdates.find((u: FollowedStreamer) => u.id === s.id && u.platform === s.platform);
+            return updated || s;
+          })
+        );
+
+        if (hasChanged) {
+          emit('reorderList', validUpdates); 
+        }
       }
     } finally {
       const elapsedTime = Date.now() - startTime;

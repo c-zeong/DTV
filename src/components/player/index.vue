@@ -20,6 +20,22 @@
           <h3>未选择直播间</h3>
           <p>请从首页选择一个直播间开始观看。</p>
         </div>
+        <div v-else-if="isLoadingStream" class="loading-player">
+          <div class="spinner"></div>
+          <p>加载直播流中...</p>
+        </div>
+        <div v-else-if="streamError" class="error-player">
+          <div class="error-icon">
+             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <h3>加载失败</h3>
+          <p>{{ streamError }}</p>
+          <button @click="retryInitialization" class="retry-btn">重试</button>
+        </div>
         <div v-else class="player-container">
           <StreamerInfo
             v-if="props.roomId"
@@ -34,14 +50,14 @@
             class="streamer-info"
           />
           <div class="video-container">
-            <div ref="playerContainer" class="video-player"></div>
+            <div ref="playerContainerRef" class="video-player"></div>
           </div>
         </div>
       </div>
 
       <DanmuList 
-        v-if="roomId" 
-        :room-id="roomId" 
+        v-if="roomId && !isLoadingStream && !streamError" 
+        :room-id="props.roomId"
         :messages="danmakuMessages"
         v-show="!isFullScreen" 
         class="danmu-panel" 
@@ -52,66 +68,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted, shallowRef, nextTick, computed } from 'vue';
+import { ref, onMounted, watch, onUnmounted, shallowRef, nextTick } from 'vue';
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type Event as TauriEvent } from '@tauri-apps/api/event';
+// Platform and common types
+import { Platform } from '../../platforms/common/types';
+import type { DanmakuMessage } from './types'; // Moved to a shared types file
+
+// Platform-specific player helpers
+import { getDouyuStreamConfig, startDouyuDanmakuListener, stopDouyuDanmaku, stopDouyuProxy } from '../../platforms/douyu/playerHelper';
+import { getDouyinStreamConfig, startDouyinDanmakuListener, stopDouyinDanmaku } from '../../platforms/douyin/playerHelper';
+
 import StreamerInfo from '../StreamerInfo/index.vue';
 import DanmuList from '../DanmuList/index.vue';
-import { fetchStreamPlaybackDetails } from '../../platforms/common/apiService';
-import { Platform } from '../../platforms/common/types';
-import type { StreamPlaybackDetails } from '../../platforms/common/types';
-
-// Interface for the payload structure coming DIRECTLY from Rust via the event
-interface RustDanmakuPayload {
-  room_id?: string; 
-  user: string;      // This is the nickname from Rust's DanmakuFrontendPayload
-  content: string;
-  user_level: number; // from Rust's i64
-  fans_club_level: number; // from Rust's i32
-  // color is not typically sent from this backend payload struct for danmaku content
-}
-
-// Interface for Douyu specific danmaku payload from Rust
-interface DouyuRustDanmakuPayload {
-  type: "chatmsg" | "uenter"; // "chatmsg" for regular danmaku, "uenter" for user entry
-  room_id: string;       // Room ID from Rust
-  nickname: string;    // "nn" from Douyu
-  content: string;     // "txt" from Douyu (only for chatmsg)
-  level: string;       // "level" from Douyu
-  badgeName?: string;  // "bnn" from Douyu
-  badgeLevel?: string; // "bl" from Douyu
-  color?: string;      // "col" from Douyu (optional chatmsg color)
-  uid?: string;        // "uid" from Douyu (only for uenter)
-}
-
-// This interface represents the Rust struct: crate::platforms::common::GetStreamUrlPayload
-// It is used as the type for the value of the 'payload' key when invoking 'start_douyin_danmu_listener'
-interface RustGetStreamUrlPayload {
-  args: {
-    room_id_str: string;
-  };
-  platform: Platform; // Platform enum from common/types
-}
-
-interface DanmakuMessage { // This is the structure used in danmakuMessages array and for DanmuList
-  type?: string;
-  uid?: string;
-  nickname: string;
-  level: string;       // String for display
-  content: string;
-  badgeName?: string;   // Douyin doesn't have this
-  badgeLevel?: string;  // String for display, from fans_club_level
-  color?: string;       // For UI customization
-  room_id?: string;     // Added to match payload from Rust for Douyu
-}
 
 const props = defineProps<{
   roomId: string | null;
   platform: Platform;
   isFollowed?: boolean;
-  streamUrl?: string | null;
+  streamUrl?: string | null; // Primarily for Douyin direct URL
   title?: string | null;
   anchorName?: string | null;
   avatar?: string | null;
@@ -124,353 +99,214 @@ const emit = defineEmits<{
   (e: 'fullscreen-change', isFullscreen: boolean): void;
 }>();
 
-const playerContainer = ref<HTMLDivElement | null>(null);
+const playerContainerRef = ref<HTMLDivElement | null>(null);
 const art = shallowRef<Artplayer | null>(null);
 const danmakuMessages = ref<DanmakuMessage[]>([]);
-const isLoadingDanmaku = ref(false);
-const isDanmakuStopped = ref(false);
-let unlistenDanmaku: (() => void) | null = null;
-const isFullScreen = ref(false);
+const isDanmakuListenerActive = ref(false); // Tracks if a danmaku listener is supposed to be running
+let unlistenDanmakuFn: (() => void) | null = null;
+
 const isLoadingStream = ref(true);
-const streamFetchAttempts = ref(0);
-const MAX_STREAM_FETCH_ATTEMPTS = 3;
 const streamError = ref<string | null>(null);
+const isFullScreen = ref(false);
 
-function determineStreamType(url: string): 'flv' | 'hls' | 'mp4' | 'm3u8' | undefined {
-  if (!url) return undefined;
-  if (url.includes('.flv')) return 'flv';
-  if (url.includes('.m3u8')) return 'hls';
-  if (url.includes('.mp4')) return 'mp4';
-  console.warn('[Player] Could not determine stream type from URL:', url);
-  return undefined;
-}
-
-const stopProxy = async () => {
-  try {
-    console.log('[Player] Attempting to stop proxy server.');
-    await invoke('stop_proxy');
-    console.log('[Player] Proxy server stop command issued.');
-  } catch (e) {
-    console.error('[Player] Error stopping proxy server:', e);
-  }
-};
-
-const startDanmaku = async () => {
-  if (!props.roomId) {
-    console.log('[Player] startDanmaku: No roomId, exiting.');
-    return;
-  }
-  if (!art.value || !art.value.plugins.artplayerPluginDanmuku) {
-    console.log('[Player] startDanmaku: Artplayer or Danmaku plugin not ready. Aborting.');
-    isLoadingDanmaku.value = false;
-    isDanmakuStopped.value = true;
-    return;
-  }
-  console.log(`[Player] Starting danmaku for room: ${props.roomId}, platform: ${props.platform}`);
-  if (unlistenDanmaku) {
-    console.log('[Player] Clearing previous danmaku listener.');
-    unlistenDanmaku();
-    unlistenDanmaku = null;
-  }
-  danmakuMessages.value = [];
-  isLoadingDanmaku.value = true;
-  isDanmakuStopped.value = false;
-  try {
-    let eventName = '';
-    if (props.platform === Platform.DOUYIN) {
-      console.log('[Player] Invoking start_douyin_danmu_listener for room:', props.roomId);
-      const rustPayload: RustGetStreamUrlPayload = { 
-        args: { room_id_str: props.roomId! }, 
-        platform: props.platform, 
-      };
-      await invoke('start_douyin_danmu_listener', { payload: rustPayload });
-      eventName = 'danmaku-message';
-    } else if (props.platform === Platform.DOUYU) {
-      console.log('[Player] Invoking start_danmaku_listener for Douyu room:', props.roomId);
-      await invoke('start_danmaku_listener', { roomId: props.roomId });
-      eventName = `danmaku-${props.roomId}`;
-    } else {
-      console.warn(`[Player] Danmaku not supported for platform: ${props.platform}`);
-      isLoadingDanmaku.value = false;
-      isDanmakuStopped.value = true;
-      return;
-    }
-    console.log(`[Player] Setting up event listener for: ${eventName}`);
-    // Listen for the raw payload from Rust
-    unlistenDanmaku = await listen<RustDanmakuPayload | DouyuRustDanmakuPayload>(eventName, (event: TauriEvent<RustDanmakuPayload | DouyuRustDanmakuPayload>) => {
-      if (art.value && art.value.plugins.artplayerPluginDanmuku && event.payload) {
-        const rawPayload = event.payload;
-        let frontendDanmaku: DanmakuMessage | null = null;
-
-        if (props.platform === Platform.DOUYIN) {
-          // Assuming rawPayload is RustDanmakuPayload for Douyin
-          const rustP = rawPayload as RustDanmakuPayload;
-          frontendDanmaku = {
-            nickname: rustP.user || '未知用户',
-            content: rustP.content || '',
-            level: String(rustP.user_level || 0),
-            badgeLevel: rustP.fans_club_level > 0 ? String(rustP.fans_club_level) : undefined,
-            // Douyin specific transformations if any
-          };
-        } else if (props.platform === Platform.DOUYU) {
-          // Assuming rawPayload is DouyuRustDanmakuPayload for Douyu
-          const douyuP = rawPayload as DouyuRustDanmakuPayload;
-          if (douyuP.type === "chatmsg") {
-            frontendDanmaku = {
-              nickname: douyuP.nickname || '未知用户',
-              content: douyuP.content || '',
-              level: String(douyuP.level || '0'),
-              badgeName: douyuP.badgeName || undefined,
-              badgeLevel: douyuP.badgeLevel && douyuP.badgeLevel !== "0" ? String(douyuP.badgeLevel) : undefined,
-              color: douyuP.color || '#FFFFFF', // Use Douyu color or default
-              uid: douyuP.uid, // Might not be used in DanmuList, but good to have
-              room_id: douyuP.room_id, // For debugging or future use
-            };
-          } else if (douyuP.type === "uenter") {
-            // Handle user entry messages, perhaps log or display differently
-            // For now, let's transform it into a system-like message in DanmuList
-            frontendDanmaku = {
-              nickname: '系统消息', // Or use douyuP.nickname if preferred for entry messages
-              content: `${douyuP.nickname || '用户'} 进入直播间`,
-              level: '0', // System messages typically don't have levels
-              color: '#A9A9A9', // A distinct color for system messages
-              uid: douyuP.uid,
-              room_id: douyuP.room_id,
-            };
-          }
-        }
-
-        if (frontendDanmaku) {
-          art.value.plugins.artplayerPluginDanmuku.emit({
-            text: frontendDanmaku.content,
-            color: frontendDanmaku.color || '#FFFFFF', 
-          });
-          danmakuMessages.value.push(frontendDanmaku); 
-          if (danmakuMessages.value.length > 200) {
-            danmakuMessages.value.splice(0, danmakuMessages.value.length - 200);
-          }
-        }
-      } else {
-        console.log('[Player] Danmaku received, but Artplayer or plugin not ready or no payload.');
-      }
-    });
-    console.log(`[Player] Danmaku listener started for ${eventName}.`);
-    isLoadingDanmaku.value = false;
-  } catch (e) {
-    console.error('[Player] Error starting danmaku:', e);
-    isLoadingDanmaku.value = false;
-    isDanmakuStopped.value = true;
-    danmakuMessages.value.push({
-      nickname: '系统消息',
-      content: `弹幕连接失败: ${(e as Error).message}`,
-      color: '#FF6347',
-      level: '0',
-    });
-  }
-};
-
-const stopDanmaku = async () => {
-  console.log(`[Player] Attempting to stop danmaku for room: ${props.roomId}, platform: ${props.platform}`);
-  if (unlistenDanmaku) {
-    console.log('[Player] Calling unlistenDanmaku function.');
-    unlistenDanmaku();
-    unlistenDanmaku = null;
-  }
-  if (props.platform === Platform.DOUYU && props.roomId) {
-      try {
-        console.log('[Player] Invoking stop_danmaku_listener for Douyu room:', props.roomId || "all active (if stop supports)");
-        if (props.roomId) {
-            await invoke('stop_danmaku_listener', { roomId: props.roomId });
-        } else {
-            console.log('[Player] No specific Douyu room ID to stop, danmaku might have been stopped by new room init or global cleanup.');
-        }
-      } catch (error) {
-        console.error('[Player] Error invoking stop_danmaku_listener for Douyu:', error);
-      }
-  } else if (props.platform === Platform.DOUYIN) {
-    console.log('[Player] stopDanmaku: Stopping Douyin danmaku listener via specific command.');
-    try {
-      const rustPayload: RustGetStreamUrlPayload = { 
-        args: { room_id_str: "stop_listening" },
-        platform: Platform.DOUYIN,
-      };
-      await invoke('start_douyin_danmu_listener', { payload: rustPayload });
-    } catch (error) {
-      console.error('[Player] Error stopping Douyin danmaku listener in stopDanmaku:', error);
-    }
-  }
-  isDanmakuStopped.value = true;
-  isLoadingDanmaku.value = false;
-  console.log(`[Player] Danmaku stop process initiated for room: ${props.roomId}, platform: ${props.platform}.`);
-};
-
-const initializePlayerAndStream = async (roomId: string, platform: Platform, directUrl?: string | null) => {
-  console.log(`[Player] initializePlayerAndStream for platform: ${platform}, roomId: ${roomId}, directUrl: ${directUrl}`);
-  if (art.value) {
-    console.log('[Player] Destroying existing ArtPlayer instance.');
-    await stopDanmaku();
-    if (platform !== Platform.DOUYU) {
-        console.log('[Player] New platform is not Douyu, attempting to stop any existing proxy from a previous session.');
-        await stopProxy(); 
-    }
-    art.value.destroy();
-    art.value = null;
-  }
-  if (!playerContainer.value) {
-    console.error('[Player] playerContainer is null. Cannot init Artplayer.');
-    streamError.value = '播放器容器不存在。';
-    isLoadingStream.value = false;
-    return;
-  }
+async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, pStreamUrlProp?: string | null) {
+  console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}`);
   isLoadingStream.value = true;
   streamError.value = null;
-  streamFetchAttempts.value = 0;
-  let finalStreamUrl: string | null = null;
-  let streamType: string | undefined = undefined;
+  danmakuMessages.value = [];
 
-  const artPlayerOptionsBase = {
-    container: playerContainer.value!,
-    isLive: true, pip: true, autoplay: true, autoSize: false, aspectRatio: false,
-    fullscreen: true, fullscreenWeb: true, miniProgressBar: true, mutex: true,
-    backdrop: false, playsInline: true, autoPlayback: true, theme: '#FB7299', lang: 'zh-cn',
-    moreVideoAttr: { playsInline: true },
-    plugins: [
-      artplayerPluginDanmuku({
-        danmuku: [], speed: 7, opacity: 1, fontSize: 20, color: '#FFFFFF',
-        mode: 0, margin: [10, '2%'], antiOverlap: true, synchronousPlayback: false,
-      }),
-    ],
-    controls: [],
-  };
-
-  const currentPlatform: Platform = platform;
-
-  if (currentPlatform === Platform.DOUYIN) {
-    if (directUrl) {
-      finalStreamUrl = directUrl;
-      streamType = determineStreamType(finalStreamUrl);
-    } else {
-      streamError.value = '抖音直播流地址未提供。';
-      isLoadingStream.value = false; return;
-    }
-  } else if (currentPlatform === Platform.DOUYU) {
-    console.log('[Player] Fetching Douyu stream details for roomId:', roomId);
-    for (let attempt = 1; attempt <= MAX_STREAM_FETCH_ATTEMPTS; attempt++) {
-      try {
-        const playbackDetails = await fetchStreamPlaybackDetails(roomId, Platform.DOUYU);
-        if (playbackDetails && playbackDetails.primaryUrl) {
-          finalStreamUrl = playbackDetails.primaryUrl;
-          streamType = playbackDetails.format === 'm3u8' ? 'hls' : playbackDetails.format;
-          streamError.value = null; break;
-        } else {
-          streamError.value = '斗鱼直播流地址获取为空。';
-        }
-      } catch (e: any) {
-        streamError.value = `获取斗鱼直播流失败(${attempt}): ${e.message}`;
-        if (attempt === MAX_STREAM_FETCH_ATTEMPTS) { isLoadingStream.value = false; return; }
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-    }
-    if (!finalStreamUrl) { isLoadingStream.value = false; return; }
-    try {
-      await stopProxy();
-      await invoke('set_stream_url_cmd', { url: finalStreamUrl });
-      finalStreamUrl = await invoke<string>('start_proxy');
-      console.log('[Player] Douyu Proxy URL:', finalStreamUrl);
-    } catch (e: any) {
-      streamError.value = `设置斗鱼代理失败: ${e.message}`;
-      isLoadingStream.value = false; return;
-    }
-  } else {
-    streamError.value = `不支持的平台: ${platform}`;
-    isLoadingStream.value = false; return;
+  if (art.value) {
+    console.log('[Player] Destroying existing ArtPlayer instance.');
+    await stopCurrentDanmakuListener(props.platform, props.roomId); 
+    if (art.value.playing) art.value.pause();
+    art.value.destroy(false);
+    art.value = null;
   }
-  if (!finalStreamUrl) {
-    streamError.value = streamError.value || '未能获取有效的直播流地址。';
-    isLoadingStream.value = false; return;
-  }
+
   try {
-    console.log(`[Player] Creating Artplayer: URL=${finalStreamUrl}, Type=${streamType}`);
-    art.value = new Artplayer({
-      ...artPlayerOptionsBase, url: finalStreamUrl, type: streamType,
-      customType: {
-        ...(streamType === 'flv' ? {
-          flv: function(video: HTMLVideoElement, url: string, artInst: Artplayer) {
-            import('mpegts.js').then(mpegts => {
-              if (mpegts.default.isSupported()) {
-                const flvPlayer = mpegts.default.createPlayer(
-                  { type: 'flv', url: url, isLive: true, hasAudio: true, hasVideo: true, cors: true, fixAudioTimestampGap: false, autoCleanupSourceBuffer: true }, 
-                  { enableWorker: true, lazyLoad: false, stashInitialSize: 1024*2, liveBufferLatencyChasing: true, liveSync: true }
-                );
-                flvPlayer.attachMediaElement(video);
-                flvPlayer.load();
-                const platformStr = String(platform);
-                video.play().catch(e => console.error(`[Player ${platformStr}] FLV Auto-play error:`, e));
-                flvPlayer.on('error', (errType, errInfo) => {
-                  console.error(`[mpegts ${platformStr}] Error:`, errType, errInfo);
-                  streamError.value = `FLV组件错误: ${errInfo.msg}`;
-                });
-              } else {
-                streamError.value = '浏览器不支持FLV播放。';
-              }
-            }).catch(err => { streamError.value = '加载FLV播放组件失败。'; });
-          }
-        } : {}),
-      },
-    });
-    art.value.on('ready', () => {
+    let streamConfig: { streamUrl: string, streamType: string | undefined };
+
+    if (pPlatform === Platform.DOUYU) {
+      streamConfig = await getDouyuStreamConfig(pRoomId);
+    } else if (pPlatform === Platform.DOUYIN) {
+      streamConfig = getDouyinStreamConfig(pStreamUrlProp);
+    } else {
+      throw new Error(`不支持的平台: ${pPlatform}`);
+    }
+    
+    isLoadingStream.value = false;
+    await nextTick();
+
+    if (!playerContainerRef.value) {
+      console.error('[Player] playerContainerRef is null AFTER nextTick. Cannot init Artplayer. This is unexpected.');
+      streamError.value = '播放器容器初始化失败。';
+      return;
+    }
+
+    const artPlayerOptions = {
+        container: playerContainerRef.value, 
+        url: streamConfig.streamUrl,
+        type: streamConfig.streamType,
+        isLive: true, pip: true, autoplay: true, autoSize: false, aspectRatio: false,
+        fullscreen: true, fullscreenWeb: true, miniProgressBar: true, mutex: true,
+        backdrop: false, playsInline: true, autoPlayback: true, theme: '#FB7299', lang: 'zh-cn',
+        moreVideoAttr: { playsInline: true },
+        plugins: [
+            artplayerPluginDanmuku({
+            danmuku: [], speed: 7, opacity: 1, fontSize: 20, color: '#FFFFFF',
+            mode: 0, margin: [10, '2%'], antiOverlap: true, synchronousPlayback: false,
+            }),
+        ],
+        controls: [],
+        customType: {
+            ...(streamConfig.streamType === 'flv' ? {
+            flv: function(video: HTMLVideoElement, url: string) {
+                import('mpegts.js').then(mpegts => {
+                if (mpegts.default.isSupported()) {
+                    const flvPlayer = mpegts.default.createPlayer(
+                    { type: 'flv', url: url, isLive: true, hasAudio: true, hasVideo: true, cors: true }, 
+                    { enableWorker: true, lazyLoad: false, stashInitialSize: 1024*2, liveBufferLatencyChasing: true }
+                    );
+                    flvPlayer.attachMediaElement(video);
+                    flvPlayer.load();
+                    video.play().catch(e => console.error(`[Player ${pPlatform}] FLV Auto-play error:`, e));
+                    flvPlayer.on('error', (errType, errInfo) => {
+                    console.error(`[mpegts ${pPlatform}] Error:`, errType, errInfo);
+                    streamError.value = `FLV组件错误: ${errInfo.msg}`;
+                    });
+                } else {
+                    streamError.value = '浏览器不支持FLV播放。';
+                }
+                }).catch(() => { streamError.value = '加载FLV播放组件失败。'; });
+            }
+            } : {}),
+        },
+    };
+    console.log(`[Player] Creating Artplayer with options:`, artPlayerOptions);
+    art.value = new Artplayer(artPlayerOptions);
+
+    art.value.on('ready', async () => {
       console.log('[Player] Artplayer instance ready.');
-      if (props.roomId && props.platform) {
-        console.log('[Player] Artplayer ready, starting danmaku.');
-        startDanmaku(); 
-      } else {
-        console.log('[Player] Artplayer ready, but no roomId/platform. Danmaku not started.');
+      if (pRoomId && pPlatform && art.value) { 
+        console.log(`[Player] Artplayer ready, starting danmaku for ${pPlatform}/${pRoomId}.`);
+        await startCurrentDanmakuListener(pPlatform, pRoomId);
       }
     });
-    art.value.on('error', (err: any) => { streamError.value = `播放器错误: ${err.message}`; isLoadingStream.value = false; });
+    art.value.on('error', (err: any) => { 
+        console.error('[Player] Artplayer error:', err);
+        streamError.value = `播放器错误: ${err.message || err}`; 
+    });
     art.value.on('fullscreen', (s: boolean) => { isFullScreen.value = s; emit('fullscreen-change', s); });
     art.value.on('fullscreenWeb', (s: boolean) => { isFullScreen.value = s; emit('fullscreen-change', s); });
+
   } catch (e: any) {
-    streamError.value = `初始化播放器失败: ${e.message}`;
+    console.error(`[Player] Error initializing player or stream for ${pPlatform}/${pRoomId}:`, e);
+    streamError.value = e.message || '初始化播放器或获取直播流失败。';
+    isLoadingStream.value = false;
   }
-  isLoadingStream.value = false;
+}
+
+async function startCurrentDanmakuListener(platformToStart: Platform, roomIdToStart: string) {
+  if (!art.value || !art.value.plugins.artplayerPluginDanmuku) {
+      console.warn('[Player] StartDanmaku: Artplayer or Danmaku plugin not ready.');
+      return;
+  }
+  if (isDanmakuListenerActive.value) {
+      console.log('[Player] StartDanmaku: Listener already active.');
+      return;
+  }
+  console.log(`[Player] Starting danmaku for: ${platformToStart}/${roomIdToStart}`);
+  try {
+    if (unlistenDanmakuFn) {
+        console.log('[Player] Cleaning up residual unlistenDanmakuFn before starting new one.');
+        unlistenDanmakuFn();
+        unlistenDanmakuFn = null;
+    }
+    danmakuMessages.value = [];
+
+    if (platformToStart === Platform.DOUYU) {
+      unlistenDanmakuFn = await startDouyuDanmakuListener(roomIdToStart, art.value, danmakuMessages);
+    } else if (platformToStart === Platform.DOUYIN) {
+      unlistenDanmakuFn = await startDouyinDanmakuListener(roomIdToStart, art.value, danmakuMessages);
+    } else {
+      console.warn(`[Player] Danmaku not supported for platform: ${platformToStart}`);
+      return;
+    }
+    isDanmakuListenerActive.value = true;
+    console.log(`[Player] Danmaku listener started successfully for ${platformToStart}/${roomIdToStart}.`);
+  } catch (e: any) {
+    console.error(`[Player] Error starting danmaku for ${platformToStart}/${roomIdToStart}:`, e);
+    danmakuMessages.value.push({ nickname: '系统消息', content: `弹幕连接失败: ${e.message}`, level: '0', color: '#FF6347' });
+    isDanmakuListenerActive.value = false;
+  }
+}
+
+async function stopCurrentDanmakuListener(platformToStop: Platform, roomIdToStop: string | null) {
+  if (!isDanmakuListenerActive.value && !unlistenDanmakuFn) {
+    console.log('[Player] StopDanmaku: No active listener or unlisten function to stop.');
+    return;
+  }
+  console.log(`[Player] Attempting to stop danmaku for: ${platformToStop}/${roomIdToStop}`);
+  
+  const currentUnlisten = unlistenDanmakuFn;
+  unlistenDanmakuFn = null;
+  isDanmakuListenerActive.value = false;
+
+  try {
+    if (platformToStop === Platform.DOUYU && roomIdToStop) {
+      await stopDouyuDanmaku(roomIdToStop, currentUnlisten);
+    } else if (platformToStop === Platform.DOUYIN) {
+      await stopDouyinDanmaku(currentUnlisten);
+    } else {
+      console.warn(`[Player] No specific danmaku stop logic for platform: ${platformToStop} or room ID missing/invalid (${roomIdToStop}).`);
+      if (currentUnlisten) {
+          console.log('[Player] Calling generic unlisten function as a fallback.');
+          currentUnlisten();
+      }
+    }
+    console.log(`[Player] Danmaku stop process potentially completed for ${platformToStop}/${roomIdToStop}.`);
+  } catch (e: any) {
+    console.error(`[Player] Error stopping danmaku for ${platformToStop}/${roomIdToStop}:`, e);
+  }
+}
+
+const retryInitialization = () => {
+  if (props.roomId && props.platform) {
+    console.log('[Player] Retrying initialization...');
+    initializePlayerAndStream(props.roomId, props.platform, props.streamUrl);
+  }
 };
 
-watch(() => [props.roomId, props.platform, props.streamUrl], async ([newRoomId, newPlatform, newStreamUrl], [oldRoomId, oldPlatform, oldStreamUrl]) => {
-  console.log(`[Player] Watch: New=${newRoomId}(${newPlatform}), URL=${newStreamUrl}. Old=${oldRoomId}(${oldPlatform}), URL=${oldStreamUrl}`);
+watch(() => [props.roomId, props.platform, props.streamUrl], async ([newRoomId, newPlatform, newStreamUrl], [oldRoomId, oldPlatformValue, oldStreamUrl]) => {
+  console.log(`[Player] Watch: New=${newRoomId}(${newPlatform}), URL=${newStreamUrl}. Old=${oldRoomId}(${oldPlatformValue})`);
+  
+  const oldPlatform = oldPlatformValue as Platform;
+
   if (newRoomId && newPlatform) {
     if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== oldStreamUrl && newStreamUrl)) {
-      console.log('[Player] Critical props changed. Re-initializing.');
-      if (oldRoomId && oldPlatform && (oldRoomId !== newRoomId || oldPlatform !== newPlatform)) {
-          console.log(`[Player] Watcher: Stopping danmaku for old room ${oldRoomId} on platform ${oldPlatform}`);
-          if (oldPlatform === Platform.DOUYU) {
-              try {
-                  await invoke('stop_danmaku_listener', { roomId: oldRoomId });
-              } catch (e) { console.error(`[Player] Error stopping old Douyu danmaku listener for ${oldRoomId}:`, e); }
-          } else if (oldPlatform === Platform.DOUYIN) {
-              try {
-                  const stopPayload: RustGetStreamUrlPayload = { args: { room_id_str: "stop_listening" }, platform: Platform.DOUYIN };
-                  await invoke('start_douyin_danmu_listener', { payload: stopPayload });
-              } catch (e) { console.error(`[Player] Error stopping old Douyin danmaku listener:`, e); }
-          }
-          if (oldPlatform === Platform.DOUYU) {
-              console.log('[Player] Watcher changing stream: old platform was Douyu, stopping proxy.');
-              await stopProxy();
-          }
+      console.log('[Player] Critical props changed. Stopping old resources and re-initializing.');
+      if (oldRoomId && oldPlatform) { 
+        await stopCurrentDanmakuListener(oldPlatform, oldRoomId);
+        if (oldPlatform === Platform.DOUYU) {
+          console.log('[Player] Watcher: old platform was Douyu, stopping proxy.');
+          await stopDouyuProxy();
+        }
       }
-      const urlToPass = newPlatform === Platform.DOUYIN ? newStreamUrl : undefined;
-      await initializePlayerAndStream(newRoomId, newPlatform as Platform, urlToPass);
-    } else {
-      console.log('[Player] Props changed but no re-initialization deemed necessary.');
+      await initializePlayerAndStream(newRoomId, newPlatform as Platform, newStreamUrl); 
     }
-  } else if (!newRoomId && art.value) {
+  } else if (!newRoomId && art.value) { 
     console.log('[Player] No newRoomId, stopping and clearing player.');
-    await stopDanmaku();
-    if (oldPlatform === Platform.DOUYU) {
-        console.log('[Player] Watcher clearing player: old platform was Douyu, stopping proxy.');
-        await stopProxy(); 
+    if (oldRoomId && oldPlatform) { 
+        await stopCurrentDanmakuListener(oldPlatform, oldRoomId);
+        if (oldPlatform === Platform.DOUYU) {
+            console.log('[Player] Watcher clearing player: old platform was Douyu, stopping proxy.');
+            await stopDouyuProxy(); 
+        }
+    } else {
+        console.log('[Player] No oldRoomId/oldPlatform to stop danmaku/proxy for.');
     }
-    art.value.destroy();
+    if (art.value.playing) art.value.pause();
+    art.value.destroy(false);
     art.value = null;
     isLoadingStream.value = false;
     danmakuMessages.value = [];
@@ -481,65 +317,34 @@ watch(() => [props.roomId, props.platform, props.streamUrl], async ([newRoomId, 
 onMounted(async () => {
   console.log(`[Player] Mounted. RoomID: ${props.roomId}, Platform: ${props.platform}, URL: ${props.streamUrl}`);
   if (props.roomId && props.platform) {
-    const urlToPass = props.platform === Platform.DOUYIN ? props.streamUrl : undefined;
-    await initializePlayerAndStream(props.roomId, props.platform, urlToPass);
+    await initializePlayerAndStream(props.roomId, props.platform, props.streamUrl);
   } else {
-    console.warn('[Player] Mounted without RoomID/Platform.');
+    console.log('[Player] Mounted without RoomID/Platform. Player will be empty.');
     isLoadingStream.value = false;
-    if (playerContainer.value && !art.value) {
-        console.log('[Player] No stream to play on mount.');
-    }
   }
 });
 
 onUnmounted(async () => {
   console.log('[Player] Component unmounted. Cleaning up...');
-  
-  if (unlistenDanmaku) {
-    console.log('[Player] Unmounting: Clearing generic danmaku listener.');
-    unlistenDanmaku();
-    unlistenDanmaku = null;
-  }
+  const platformToStop: Platform = props.platform;
+  const roomIdToStop: string | null = props.roomId;
+  await stopCurrentDanmakuListener(platformToStop, roomIdToStop);
 
-  const currentRoomId = props.roomId;
-  const currentPlatform = props.platform;
-
-  console.log(`[Player] Unmounting: Current platform ${currentPlatform}, room ${currentRoomId}`);
-
-  if (currentPlatform === Platform.DOUYIN) {
-    console.log('[Player] Unmounting: Stopping Douyin danmaku listener.');
-    try {
-      const rustPayload: RustGetStreamUrlPayload = { 
-        args: { room_id_str: "stop_listening" },
-        platform: Platform.DOUYIN,
-      };
-      await invoke('start_douyin_danmu_listener', { payload: rustPayload });
-    } catch (error) {
-      console.error('[Player] Error stopping Douyin danmaku listener on unmount:', error);
-    }
-  } else if (currentPlatform === Platform.DOUYU && currentRoomId) {
-    try {
-      console.log('[Player] Unmounting: Invoking stop_danmaku_listener for Douyu room:', currentRoomId);
-      await invoke('stop_danmaku_listener', { roomId: currentRoomId });
-    } catch (error) {
-      console.error('[Player] Error invoking stop_danmaku_listener for Douyu on unmount:', error);
-    }
-  } else if (currentPlatform === Platform.DOUYU && !currentRoomId) {
-    console.log('[Player] Unmounting: Douyu platform but no specific room ID. Danmaku might have been stopped or was never started for a specific room in this instance.');
-  }
-
-  if (currentPlatform === Platform.DOUYU) {
-    await stopProxy();
+  if (props.platform === Platform.DOUYU) {
+      console.log('[Player] Unmounting: Ensuring Douyu proxy is stopped if it was the active platform.');
+      await stopDouyuProxy();
   }
 
   if (art.value) {
     console.log('[Player] Unmounting: Destroying ArtPlayer instance.');
-    art.value.destroy();
+    if (art.value.playing) art.value.pause();
+    art.value.destroy(true);
     art.value = null;
   }
-  danmakuMessages.value = [];
+  danmakuMessages.value = []; 
   console.log('[Player] Cleanup on unmount finished.');
 });
+
 </script>
 
 <style scoped>
@@ -744,7 +549,7 @@ onUnmounted(async () => {
 }
 
 /* 空播放器状态 */
-.empty-player {
+.empty-player, .loading-player, .error-player {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -761,23 +566,52 @@ onUnmounted(async () => {
   color: #bec0c7;
 }
 
-.empty-player .empty-icon {
+.empty-player .empty-icon, .loading-player .spinner, .error-player .error-icon {
   margin-bottom: 20px;
   color: #666;
   opacity: 0.7;
 }
 
-.empty-player h3 {
+.loading-player .spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #FB7299;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-player h3, .loading-player h3, .error-player h3 {
   margin: 0 0 12px;
   font-size: 22px;
   font-weight: 600;
   color: #e0e0e0;
 }
 
-.empty-player p {
+.empty-player p, .loading-player p, .error-player p {
   margin: 0;
   font-size: 16px;
   opacity: 0.8;
+}
+
+.error-player .retry-btn {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #FB7299;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s ease;
+}
+.error-player .retry-btn:hover {
+  background-color: #e06387;
 }
 
 /* 视频元素样式 */

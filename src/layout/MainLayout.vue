@@ -34,7 +34,8 @@ import { useRouter } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import Header from './Header.vue'
 import { useFollowStore } from '../store/followStore'
-import type { FollowedStreamer, Platform } from '../platforms/common/types'
+import type { FollowedStreamer } from '../platforms/common/types'
+import { Platform } from '../platforms/common/types'
 
 const router = useRouter()
 const followStore = useFollowStore()
@@ -44,10 +45,23 @@ const followedStreamersFromStore = computed(() => followStore.getFollowedStreame
 const isPlayerFullscreen = ref(false)
 
 const handleStreamerSelect = (streamer: FollowedStreamer) => {
+  let routeName = '';
+  if (streamer.platform === Platform.DOUYU) {
+    routeName = 'douyuPlayer';
+  } else if (streamer.platform === Platform.DOUYIN) {
+    routeName = 'douyinPlayer';
+  } else {
+    console.error('Unsupported platform for player:', streamer.platform);
+    return; // Or handle error appropriately
+  }
+
   router.push({
-    name: 'player',
-    params: { roomId: streamer.id }
-  })
+    name: routeName,
+    params: { 
+      roomId: streamer.id
+      // platform is now part of the path structure, not a separate param for these routes
+    }
+  });
 }
 
 const handleFollowStore = (streamer: FollowedStreamer) => {

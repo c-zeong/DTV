@@ -1,7 +1,7 @@
 // import type { LiveStreamer } from "./types"; // Removed self-import
 
 // Moved from apiService.ts
-export type SupportedPlatform = 'douyu' | 'bilibili'; // Add other platforms as needed
+export type SupportedPlatform = 'douyu' | 'bilibili' | 'douyin'; // Add other platforms as needed
 
 // Common platform types placeholder 
 
@@ -47,7 +47,7 @@ export interface StreamerDetails {
   platform: SupportedPlatform; // To know the source
   roomTitle: string;
   nickname: string;
-  avatarUrl: string;
+  avatarUrl: string | null; // Changed to allow null
   isLive: boolean;
   isReplay?: boolean; // Optional, as not all platforms might explicitly state this
   categoryName?: string;
