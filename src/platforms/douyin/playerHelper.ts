@@ -15,16 +15,38 @@ export interface DouyinRustDanmakuPayload {
   fans_club_level: number; // from Rust's i32
 }
 
-export function getDouyinStreamConfig(directUrl: string | null | undefined): { streamUrl: string, streamType: string | undefined } {
+export function getDouyinStreamConfig(directUrl: string | null | undefined): { streamUrl: string, streamType: string } {
+  console.log('[DouyinPlayerHelper] getDouyinStreamConfig called with directUrl:', directUrl);
   if (!directUrl) {
+    console.error('[DouyinPlayerHelper] Error: directUrl is null or undefined.');
     throw new Error('抖音直播流地址未提供。');
   }
-  let streamType: string | undefined = undefined;
-  if (directUrl.includes('.flv')) streamType = 'flv';
-  else if (directUrl.includes('.m3u8')) streamType = 'hls';
-  else if (directUrl.includes('.mp4')) streamType = 'mp4';
-  else console.warn('[DouyinPlayerHelper] Could not determine stream type from URL:', directUrl);
   
+  let streamType: string = 'flv'; // Default to FLV
+  console.log('[DouyinPlayerHelper] Initial streamType set to:', streamType);
+
+  // Check if the hostname contains 'pull-hls' or if path ends with .m3u8
+  try {
+    const urlObj = new URL(directUrl);
+    const hostname = urlObj.hostname;
+    const pathname = urlObj.pathname;
+    console.log(`[DouyinPlayerHelper] Parsed URL: hostname='${hostname}', pathname='${pathname}'`);
+
+    if (hostname.includes('pull-hls') || pathname.toLowerCase().endsWith('.m3u8')) {
+      console.warn(`[DouyinPlayerHelper] Condition met for HLS: hostname includes 'pull-hls' (${hostname.includes('pull-hls')}) OR pathname ends with .m3u8 (${pathname.toLowerCase().endsWith('.m3u8')}). Setting streamType to 'hls'.`);
+      streamType = 'hls';
+    } else {
+      console.log(`[DouyinPlayerHelper] Condition for HLS not met. hostname='${hostname}', pathname='${pathname}'. Keeping streamType as 'flv'.`);
+      streamType = 'flv'; // Explicitly set for clarity, though it's the default
+    }
+  } catch (e) {
+    console.error('[DouyinPlayerHelper] Failed to parse URL or check hostname/pathname:', directUrl, e);
+    // Fallback to FLV if URL parsing or checks fail
+    streamType = 'flv';
+    console.log('[DouyinPlayerHelper] Error during URL parsing, falling back to streamType:', streamType);
+  }
+  
+  console.log('[DouyinPlayerHelper] Final determined streamConfig:', { streamUrl: directUrl, streamType });
   return { streamUrl: directUrl, streamType };
 }
 

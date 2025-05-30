@@ -49,6 +49,8 @@
             @follow="$emit('follow', $event)"
             @unfollow="$emit('unfollow', $event)"
             class="streamer-info"
+            v-show="!isInWebFullscreen"
+            :class="{'hidden-panel': isInWebFullscreen}"
           />
           <div class="video-container">
             <div ref="playerContainerRef" class="video-player"></div>
@@ -72,6 +74,7 @@
 import { ref, onMounted, watch, onUnmounted, shallowRef, nextTick } from 'vue';
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
+import Hls from 'hls.js';
 // Platform and common types
 import { Platform } from '../../platforms/common/types';
 import type { DanmakuMessage } from './types'; // Moved to a shared types file
@@ -109,7 +112,10 @@ let unlistenDanmakuFn: (() => void) | null = null;
 
 const isLoadingStream = ref(true);
 const streamError = ref<string | null>(null);
-const isFullScreen = ref(false);
+
+const isInNativeFullscreen = ref(false);
+const isInWebFullscreen = ref(false);
+const isFullScreen = ref(false); // True if either native or web fullscreen is active
 
 async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, pStreamUrlProp?: string | null) {
   console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}`);
@@ -149,7 +155,7 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         container: playerContainerRef.value, 
         url: streamConfig.streamUrl,
         type: streamConfig.streamType,
-        isLive: true, pip: true, autoplay: true, autoSize: false, aspectRatio: false,
+        isLive: true, pip: true, autoplay: true, autoSize: true, aspectRatio: true,
         fullscreen: true, fullscreenWeb: true, miniProgressBar: true, mutex: true,
         backdrop: false, playsInline: true, autoPlayback: true, theme: '#FB7299', lang: 'zh-cn',
         moreVideoAttr: { playsInline: true },
@@ -163,24 +169,94 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         customType: {
             ...(streamConfig.streamType === 'flv' ? {
             flv: function(video: HTMLVideoElement, url: string) {
+                // Capture pPlatform for logging within this function's scope
+                const platformForLog = pPlatform; 
                 import('mpegts.js').then(mpegts => {
                 if (mpegts.default.isSupported()) {
+                    console.log(`[Player ${platformForLog}] mpegts.js is supported. Initializing FLV player for URL:`, url);
                     const flvPlayer = mpegts.default.createPlayer(
-                    { type: 'flv', url: url, isLive: true, hasAudio: true, hasVideo: true, cors: true }, 
-                    { enableWorker: true, lazyLoad: false, stashInitialSize: 1024*2, liveBufferLatencyChasing: true }
+                    { type: 'flv', url: url, isLive: true, cors: true, hasAudio: true, hasVideo: true }, 
+                    {}
                     );
                     flvPlayer.attachMediaElement(video);
                     flvPlayer.load();
-                    video.play().catch(e => console.error(`[Player ${pPlatform}] FLV Auto-play error:`, e));
+                    video.play().catch(e => console.error(`[Player ${platformForLog}] FLV Auto-play error:`, e));
                     flvPlayer.on('error', (errType, errInfo) => {
-                    console.error(`[mpegts ${pPlatform}] Error:`, errType, errInfo);
+                    console.error(`[mpegts ${platformForLog}] Error:`, errType, errInfo);
                     streamError.value = `FLV组件错误: ${errInfo.msg}`;
                     });
                 } else {
+                    console.error(`[Player ${platformForLog}] Browser does not support FLV playback (mpegts.js).`);
                     streamError.value = '浏览器不支持FLV播放。';
                 }
-                }).catch(() => { streamError.value = '加载FLV播放组件失败。'; });
+                }).catch((e) => { 
+                    console.error(`[Player ${platformForLog}] Failed to load mpegts.js component:`, e);
+                    streamError.value = '加载FLV播放组件失败。'; 
+                });
             }
+            } : {}),
+            ...(streamConfig.streamType === 'hls' ? {
+              hls: function (video: HTMLVideoElement, url: string) {
+                // Capture pPlatform for logging within this function's scope
+                const platformForLog = pPlatform; 
+                console.log(`[Player ${platformForLog}] Custom HLS type handler called for URL:`, url);
+                if (Hls.isSupported()) {
+                  console.log(`[Player ${platformForLog}] hls.js is supported.`);
+                  const hlsConfig = {
+                    debug: true, // Enable hls.js debug logging
+                    // --- Optimizations for faster start-up ---
+                    startFragPrefetch: true, // Try to prefetch segments aggressively
+                    maxBufferLength: 15,     // Reduce target buffer length (default 30s)
+                    // maxMaxBufferLength: 30, // Corresponds to maxBufferLength
+                    // Consider liveSyncDurationCount or liveMaxLatencyDurationCount for live streams if issues arise
+                    // --- End Optimizations ---
+                    // Other hls.js specific configurations can be added here if needed
+                    // e.g., xhrSetup: function(xhr, url) { xhr.withCredentials = true; } for CORS issues
+                  };
+                  console.log(`[Player ${platformForLog}] hls.js config:`, hlsConfig);
+                  const hls = new Hls(hlsConfig);
+                  console.log(`[Player ${platformForLog}] hls.js instance created. Loading source:`, url);
+                  hls.loadSource(url);
+                  console.log(`[Player ${platformForLog}] Attaching media element.`);
+                  hls.attachMedia(video);
+                  
+                  hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+                    console.log(`[hls.js ${platformForLog}] Manifest parsed successfully. Levels:`, data.levels);
+                    video.play().catch(e => console.error(`[Player ${platformForLog}] HLS Auto-play error after manifest parsed:`, e));
+                  });
+
+                  hls.on(Hls.Events.LEVEL_LOADED, function(event, data) {
+                    console.log(`[hls.js ${platformForLog}] Level ${data.level} loaded. Details:`, data.details);
+                  });
+
+                  hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                      console.error(`[hls.js ${platformForLog}] Fatal error: `, data);
+                      streamError.value = `HLS错误: ${data.details} (type: ${data.type})`;
+                    } else {
+                      console.warn(`[hls.js ${platformForLog}] Non-fatal error: `, data);
+                    }
+                  });
+                  
+                  // It's often better to initiate play after MANIFEST_PARSED or a similar event.
+                  // However, Artplayer might handle this, or immediate play might be intended.
+                  // video.play().catch(e => console.error(`[Player ${platformForLog}] HLS Auto-play error:`, e));
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                  console.log(`[Player ${platformForLog}] Native HLS playback supported (e.g., Safari). Setting src to:`, url);
+                  video.src = url;
+                  video.addEventListener('loadedmetadata', function() {
+                    console.log(`[Player ${platformForLog}] Native HLS metadata loaded. Attempting to play.`);
+                    video.play().catch(e => console.error(`[Player ${platformForLog}] Native HLS Auto-play error:`, e));
+                  });
+                  video.addEventListener('error', function(e) {
+                     console.error(`[Player ${platformForLog}] Native HLS video element error:`, e);
+                     streamError.value = '浏览器原生HLS播放失败。';
+                  });
+                } else {
+                  console.error(`[Player ${platformForLog}] Browser does not support HLS playback (hls.js or native).`);
+                  streamError.value = '浏览器不支持HLS播放。';
+                }
+              }
             } : {}),
         },
     };
@@ -198,8 +274,38 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         console.error('[Player] Artplayer error:', err);
         streamError.value = `播放器错误: ${err.message || err}`; 
     });
-    art.value.on('fullscreen', (s: boolean) => { isFullScreen.value = s; emit('fullscreen-change', s); });
-    art.value.on('fullscreenWeb', (s: boolean) => { isFullScreen.value = s; emit('fullscreen-change', s); });
+    art.value.on('fullscreen', (nativeActive: boolean) => {
+      // console.log(`[Player] Native fullscreen event: ${nativeActive}`); // Optional
+      isInNativeFullscreen.value = nativeActive;
+
+      if (nativeActive && isInWebFullscreen.value) {
+        // If entering native fullscreen while web fullscreen is active, turn off web fullscreen.
+        // Artplayer might do this automatically, but good to be explicit.
+        if (art.value) art.value.fullscreenWeb = false;
+        isInWebFullscreen.value = false;
+      }
+      // When exiting native fullscreen (!nativeActive), Artplayer 5.2.2 should correctly handle its state.
+      // We just reflect its state. If it also exits web fullscreen, its own fullscreenWeb event should fire.
+      
+      isFullScreen.value = isInNativeFullscreen.value || isInWebFullscreen.value;
+      emit('fullscreen-change', isFullScreen.value);
+      // console.log(`[Player] Native fullscreen handler: Emitted fullscreen-change: ${isFullScreen.value}`); // Optional
+    });
+
+    art.value.on('fullscreenWeb', (webActive: boolean) => {
+      // console.log(`[Player] Web fullscreen event: ${webActive}`); // Optional
+      isInWebFullscreen.value = webActive;
+
+      if (webActive && isInNativeFullscreen.value) {
+        // If entering web fullscreen while native fullscreen is active, turn off native fullscreen.
+        // This is mainly for our state consistency, as user would need to exit native FS first via ESC.
+        isInNativeFullscreen.value = false;
+      }
+      
+      isFullScreen.value = isInNativeFullscreen.value || isInWebFullscreen.value;
+      emit('fullscreen-change', isFullScreen.value);
+      // console.log(`[Player] Web fullscreen handler: Emitted fullscreen-change: ${isFullScreen.value}`); // Optional
+    });
 
   } catch (e: any) {
     console.error(`[Player] Error initializing player or stream for ${pPlatform}/${pRoomId}:`, e);

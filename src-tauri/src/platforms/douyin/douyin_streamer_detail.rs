@@ -108,6 +108,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
 
     let mut final_stream_url: Option<String> = None;
 
+    // Try to get FLV stream from live_core_sdk_data
     if let Some(sdk_data) = &stream_url_container.live_core_sdk_data {
         if let Some(pull_data) = &sdk_data.pull_data {
             if let Some(stream_data_str) = &pull_data.stream_data {
@@ -124,39 +125,69 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
                                     if let Some(links) = &opt_quality_detail.main {
                                         if let Some(flv_url) = links.flv.as_ref().filter(|s| !s.is_empty()) {
                                             final_stream_url = Some(flv_url.clone());
-                                            break;
+                                            println!("[Douyin Live RS INFO] Found FLV URL from sdk_data: {}", flv_url);
+                                            break; // Found an FLV URL, stop searching in sdk_data
                                         }
                                     }
                                 }
-                                if final_stream_url.is_none() {
-                                    for opt_quality_detail in stream_options.iter().flatten() {
-                                        if let Some(links) = &opt_quality_detail.main {
-                                            if let Some(hls_url) = links.hls.as_ref().filter(|s| !s.is_empty()) {
-                                                final_stream_url = Some(hls_url.clone());
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
+                                // HLS lookup from sdk_data is intentionally omitted here,
+                                // as the primary HLS fallback is from hls_pull_url_map.
                             }
                         },
                         Err(e) => {
-                            println!("[Douyin Live RS WARN] Failed to parse inner stream_data JSON: {}. String was: {}", e, stream_data_str);
+                            println!("[Douyin Live RS WARN] Failed to parse inner stream_data JSON from live_core_sdk_data: {}. String was: {}", e, stream_data_str);
                         }
+                    }
+                } else {
+                    println!("[Douyin Live RS INFO] stream_data string is empty in live_core_sdk_data.pull_data.");
+                }
+            } else {
+                println!("[Douyin Live RS INFO] stream_data is None in live_core_sdk_data.pull_data.");
+            }
+        } else {
+            println!("[Douyin Live RS INFO] pull_data is None in live_core_sdk_data.");
+        }
+    } else {
+        println!("[Douyin Live RS INFO] live_core_sdk_data is None in stream_url_container.");
+    }
+
+    // If an FLV URL was found from sdk_data, check if it's a valid "pull-flv" URL.
+    // If not, discard it so we fall back to HLS from hls_pull_url_map.
+    if let Some(ref url) = final_stream_url {
+        if !url.contains("pull-flv") {
+            println!("[Douyin Live RS INFO] FLV URL from sdk_data ('{}') does not contain 'pull-flv'. Discarding and attempting HLS from hls_pull_url_map.", url);
+            final_stream_url = None; // Discard, so HLS will be attempted next
+        } else {
+            println!("[Douyin Live RS INFO] Valid FLV URL from sdk_data with 'pull-flv' found: {}. Will use this stream.", url);
+        }
+    }
+
+    // If no valid FLV stream (with "pull-flv") was found from sdk_data, try HLS stream from hls_pull_url_map
+    if final_stream_url.is_none() {
+        println!("[Douyin Live RS INFO] No valid FLV stream from sdk_data, or it was discarded. Attempting HLS from hls_pull_url_map.");
+        if let Some(hls_map) = &stream_url_container.hls_pull_url_map {
+            // Try to get FULL_HD1
+            if let Some(full_hd_url) = hls_map.get("FULL_HD1") {
+                if !full_hd_url.is_empty() {
+                    final_stream_url = Some(full_hd_url.clone());
+                }
+            }
+
+            // If FULL_HD1 was not found or its URL was empty, try HD1
+            if final_stream_url.is_none() {
+                if let Some(hd_url) = hls_map.get("HD1") {
+                    if !hd_url.is_empty() {
+                        final_stream_url = Some(hd_url.clone());
                     }
                 }
             }
-        }
-    }
-    
-    if final_stream_url.is_none() {
-        if let Some(flv_map) = &stream_url_container.flv_pull_url {
-            for quality_key in PREFERRED_QUALITIES.iter() {
-                if let Some(url) = flv_map.get(*quality_key).filter(|s| !s.is_empty()) {
-                    final_stream_url = Some(url.clone());
-                    break;
-                }
+
+            // Optional: log if no suitable URL was found in the map
+            if final_stream_url.is_none() {
+                println!("[Douyin Live RS INFO] No suitable HLS stream (FULL_HD1, HD1) found in hls_pull_url_map. Map content: {:?}", hls_map);
             }
+        } else {
+            println!("[Douyin Live RS INFO] hls_pull_url_map not found or is None in stream_url_container.");
         }
     }
 

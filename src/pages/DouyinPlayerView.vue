@@ -21,6 +21,7 @@
       @follow="handleFollow" 
       @unfollow="handleUnfollow" 
       @close-player="handleClosePlayer" 
+      @fullscreen-change="handlePlayerFullscreenChange" 
     />
     <!-- Fallback if stream URL not found but other info is -->
      <div v-else-if="streamInfo && !isLoading" class="info-without-stream">
@@ -52,6 +53,8 @@ const props = defineProps<{
   // Platform prop is no longer needed here as this view is Douyin-specific
   roomId: string;
 }>();
+
+const emit = defineEmits(['fullscreen-change']);
 
 const router = useRouter();
 const followStore = useFollowStore();
@@ -166,6 +169,11 @@ const handleUnfollow = () => {
 const handleClosePlayer = () => {
   console.log('[DouyinPlayerView] Close player event received. Navigating back.');
   router.back();
+};
+
+const handlePlayerFullscreenChange = (isFullscreen: boolean) => {
+  emit('fullscreen-change', isFullscreen);
+  console.log('[DouyinPlayerView] Fullscreen event re-emitted:', isFullscreen);
 };
 
 </script>

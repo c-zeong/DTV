@@ -1,6 +1,6 @@
 <template>
   <div class="player-view">
-    <MainPlayer v-if="roomId" :room-id="roomId" :platform="Platform.DOUYU" :is-followed="isFollowed" @follow="handleFollow" @unfollow="handleUnfollow" @close-player="handleClosePlayer" />
+    <MainPlayer v-if="roomId" :room-id="roomId" :platform="Platform.DOUYU" :is-followed="isFollowed" @follow="handleFollow" @unfollow="handleUnfollow" @close-player="handleClosePlayer" @fullscreen-change="handlePlayerFullscreenChange" />
     <div v-else class="invalid-room">
       <p>无效的斗鱼房间ID。</p>
       <button @click="router.back()">返回</button>
@@ -19,6 +19,8 @@ import { Platform } from '../platforms/common/types';
 const props = defineProps<{
   roomId: string;
 }>();
+
+const emit = defineEmits(['fullscreen-change']);
 
 const router = useRouter();
 const followStore = useFollowStore();
@@ -58,6 +60,11 @@ const handleUnfollow = () => { // Douyu only needs roomId for unfollow from stor
 const handleClosePlayer = () => {
   console.log('[DouyuPlayerView] Close player event received. Navigating back.');
   router.back();
+};
+
+const handlePlayerFullscreenChange = (isFullscreen: boolean) => {
+  emit('fullscreen-change', isFullscreen);
+  console.log('[DouyuPlayerView] Fullscreen event re-emitted:', isFullscreen);
 };
 
 watch(() => props.roomId, (newRoomId, oldRoomId) => {

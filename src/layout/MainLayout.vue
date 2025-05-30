@@ -1,6 +1,7 @@
 <template>
-  <div class="app" :class="{'hide-ui': isPlayerFullscreen}">
+  <div class="app">
     <Sidebar 
+      v-show="!isPlayerFullscreen"
       :followedAnchors="followedStreamersFromStore" 
       @selectAnchor="handleStreamerSelect"
       @unfollow="handleUnfollowStore"
@@ -8,6 +9,7 @@
     />
     <div class="main-content">
       <Header 
+        v-show="!isPlayerFullscreen"
         @select-anchor="handleStreamerSelect"
         @follow="handleFollowStore"
         @unfollow="handleUnfollowStore"
