@@ -31,16 +31,39 @@ export async function getDouyuStreamConfig(roomId: string): Promise<{ streamUrl:
       if (playbackDetails && playbackDetails.primaryUrl) {
         finalStreamUrl = playbackDetails.primaryUrl;
         streamType = playbackDetails.format === 'm3u8' ? 'hls' : playbackDetails.format;
+        console.log(`[DouyuPlayerHelper] Stream details acquired on attempt ${attempt}:`, { finalStreamUrl, streamType });
         break; 
       } else {
+        // This case might be redundant if fetchStreamPlaybackDetails throws an error for empty/null URLs
         throw new Error('斗鱼直播流地址获取为空。');
       }
     } catch (e: any) {
-      console.error(`[DouyuPlayerHelper] 获取斗鱼直播流失败(${attempt}): ${e.message}`);
+      console.error(`[DouyuPlayerHelper] 获取斗鱼直播流失败 (尝试 ${attempt}/${MAX_STREAM_FETCH_ATTEMPTS}):`, e.message);
+      // Check for specific error messages indicating streamer is offline or room doesn't exist
+      // These are examples; actual messages from your Rust backend might differ.
+      const offlineOrInvalidRoomMessages = [
+        "主播未开播", // Generic offline message
+        "房间不存在", // Generic room not found
+        "error: 1",   // Example: Douyu API error code 1 (often offline or invalid)
+        "error: 102", // Example: Douyu API error code 102 (often room not found or offline)
+        "error code 1", // More flexible matching for error codes
+        "error code 102"
+        // Add other known patterns here from your Rust error messages
+      ];
+
+      const errorMessageLowerCase = e.message?.toLowerCase() || '';
+      const isDefinitivelyOffline = offlineOrInvalidRoomMessages.some(msg => errorMessageLowerCase.includes(msg.toLowerCase()));
+
+      if (isDefinitivelyOffline) {
+        console.warn(`[DouyuPlayerHelper] Streamer for room ${roomId} is definitively offline or room is invalid. Aborting retries.`);
+        throw e; // Re-throw the specific error to stop retries
+      }
+
       if (attempt === MAX_STREAM_FETCH_ATTEMPTS) {
         throw new Error(`获取斗鱼直播流失败 (尝试 ${MAX_STREAM_FETCH_ATTEMPTS} 次后): ${e.message}`);
       }
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff might be better
+      // Exponential backoff might be better, but simple delay for now
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); 
     }
   }
 

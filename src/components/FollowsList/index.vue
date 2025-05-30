@@ -40,11 +40,13 @@
             v-for="(streamer, index) in streamers"
             :key="streamer.id"
             class="streamer-item"
-            :class="{ 
-              'is-live': streamer.isLive,
-              'is-dragging': isDragging && draggedIndex === index,
-              'just-added': justAddedIds.includes(streamer.id)
-            }"
+            :class="[
+              getStreamerItemClass(streamer),
+              { 
+                'is-dragging': isDragging && draggedIndex === index,
+                'just-added': justAddedIds.includes(streamer.id)
+              }
+            ]"
             @mousedown="handleMouseDown($event, index)"
             @click="handleClick($event, streamer)"
           >
@@ -71,7 +73,7 @@
             </div>
             
             <div class="status-container">
-              <div class="live-indicator" :class="{'is-live': streamer.isLive}"></div>
+              <div class="live-indicator" :class="getLiveIndicatorClass(streamer)"></div>
             </div>
           </li>
         </TransitionGroup>
@@ -82,18 +84,16 @@
   <script setup lang="ts">
   import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
   import { invoke } from '@tauri-apps/api/core';
-  import type { FollowedStreamer } from '../../platforms/common/types';
+  import type { FollowedStreamer, LiveStatus } from '../../platforms/common/types';
   import { Platform } from '../../platforms/common/types';
-  import type { DouyuRoomInfo } from '../../platforms/douyu/types';
+  // import type { DouyuRoomInfo } from '../../platforms/douyu/types'; // No longer needed here
+  // import type { DouyinRoomInfo } from './types'; // No longer defined here
+
+  import { refreshDouyuFollowedStreamer } from '../../platforms/douyu/followListHelper';
+  import { refreshDouyinFollowedStreamer } from '../../platforms/douyin/followListHelper';
   
   // Updated DouyinRoomInfo to match the Rust struct DouyinFollowListRoomInfo
-  interface DouyinRoomInfo { // This will be the type for `data` from invoke
-    room_id_str: string;
-    nickname: string;
-    room_name: string; 
-    avatar_url: string; 
-    status: number; // 2 for live (as per get_douyin_live_stream_url behavior)
-  }
+  // interface DouyinRoomInfo { // This will be the type for `data` from invoke
   
   const props = defineProps<{
     followedAnchors: FollowedStreamer[]
@@ -116,7 +116,44 @@
   
   const MIN_ANIMATION_DURATION = 1500;
   
-  const streamers = computed(() => props.followedAnchors);
+  const getLiveStatusSortOrder = (status: LiveStatus | undefined): number => {
+    switch (status) {
+      case 'LIVE': return 1;
+      case 'REPLAY': return 2;
+      case 'OFFLINE': return 3;
+      case 'UNKNOWN': return 4;
+      default: return 5; // Should not happen with defined types
+    }
+  };
+
+  const streamers = computed(() => {
+    return [...props.followedAnchors].sort((a, b) => {
+      return getLiveStatusSortOrder(a.liveStatus) - getLiveStatusSortOrder(b.liveStatus);
+    });
+  });
+  
+  // Method to determine class for the list item itself
+  const getStreamerItemClass = (streamer: FollowedStreamer) => {
+    return {
+      'status-live': streamer.liveStatus === 'LIVE',
+      'status-replay': streamer.liveStatus === 'REPLAY',
+      'status-offline': streamer.liveStatus === 'OFFLINE' || !streamer.liveStatus || streamer.liveStatus === 'UNKNOWN',
+    };
+  };
+
+  // Method to determine class for the live indicator dot
+  const getLiveIndicatorClass = (streamer: FollowedStreamer) => {
+    switch (streamer.liveStatus) {
+      case 'LIVE':
+        return 'is-live'; // Existing class for green
+      case 'REPLAY':
+        return 'is-replay'; // New class for yellow
+      case 'OFFLINE':
+      case 'UNKNOWN':
+      default:
+        return 'is-offline'; // New or existing class for gray/default
+    }
+  };
   
   watch(() => props.followedAnchors, (newVal, oldVal) => {
     if (!oldVal || oldVal.length === 0) return;
@@ -223,57 +260,27 @@
     try {
       const updates = await Promise.all(
         props.followedAnchors.map(async (streamer) => {
+          let updatedStreamerData: Partial<FollowedStreamer> = {};
           try {
-            let updatedStreamerData: Partial<FollowedStreamer> = {};
-
             if (streamer.platform === Platform.DOUYU) {
-              const data = await invoke<DouyuRoomInfo>('fetch_douyu_room_info', { 
-                roomId: streamer.id
-              });
-              if (data && data.room_id) {
-                const showStatus = Number(data.show_status);
-                const videoLoop = Number(data.videoLoop);
-                updatedStreamerData = {
-                  isLive: showStatus === 1 && videoLoop !== 1,
-                  nickname: data.nickname || streamer.nickname,
-                  roomTitle: data.room_name || streamer.roomTitle,
-                  avatarUrl: data.avatar_mid || streamer.avatarUrl,
-                };
-              } else {
-                console.warn(`[FollowsList] Received no/invalid data for Douyu room ${streamer.id}`, data);
-              }
+              updatedStreamerData = await refreshDouyuFollowedStreamer(streamer);
             } else if (streamer.platform === Platform.DOUYIN) {
-              // Use the new command and expect the flat DouyinRoomInfo structure
-              // Pass `liveId` as the parameter name to match Rust command if it was live_id
-              // Assuming streamer.id for Douyin followed items is the `live_id` (e.g., username or original ID)
-              const data = await invoke<DouyinRoomInfo>('fetch_douyin_room_info', { 
-                liveId: streamer.id 
-              });
-              
-              // Check if data is valid and has expected properties (flat structure)
-              if (data && data.room_id_str) { 
-                updatedStreamerData = {
-                  isLive: data.status === 2, // Douyin: status 2 means live
-                  nickname: data.nickname || streamer.nickname,
-                  roomTitle: data.room_name || streamer.roomTitle, // data.room_name is the title
-                  avatarUrl: data.avatar_url || streamer.avatarUrl,
-                  // id: data.room_id_str, // Keep streamer.id as the primary key for followed item if it's the live_id
-                };
-              } else {
-                console.warn(`[FollowsList] Received no/invalid data for Douyin room ${streamer.id}`, data);
-              }
+              updatedStreamerData = await refreshDouyinFollowedStreamer(streamer);
             } else {
               console.warn(`Unsupported platform for refresh: ${streamer.platform}`);
-              return streamer; 
+              return streamer; // Return original if platform unsupported for refresh
             }
 
+            // Merge original streamer data with updates. Updates take precedence.
             return {
               ...streamer,
               ...updatedStreamerData,
-            } as FollowedStreamer;
+            } as FollowedStreamer; // Cast as FollowedStreamer, assuming helpers provide compatible partials
 
           } catch (e) {
-            console.error(`Failed to refresh streamer ${streamer.platform}/${streamer.id}:`, e);
+            // Error at the level of refreshing a single streamer (already logged in helpers)
+            // Return the original streamer data so it's not lost from the list
+            console.error(`[FollowsList] Error during refresh for ${streamer.platform}/${streamer.id}, returning original:`, e);
             return streamer; 
           }
         })
@@ -282,15 +289,13 @@
       const validUpdates = updates.filter((update: FollowedStreamer | undefined): update is FollowedStreamer => !!update && typeof update.id !== 'undefined');
       
       if (validUpdates.length > 0) {
-        const hasChanged = JSON.stringify(validUpdates) !== JSON.stringify(
-          props.followedAnchors.map((s: FollowedStreamer) => {
-            const updated = validUpdates.find((u: FollowedStreamer) => u.id === s.id && u.platform === s.platform);
-            return updated || s;
-          })
-        );
+        const hasChanged = JSON.stringify(validUpdates) !== JSON.stringify(props.followedAnchors);
 
         if (hasChanged) {
           emit('reorderList', validUpdates); 
+          console.log('[FollowsList] Data changed, emitted reorderList with updates.');
+        } else {
+          console.log('[FollowsList] Data fetched, but no changes detected compared to current list.');
         }
       }
     } finally {
@@ -557,16 +562,23 @@
   }
   
   .live-indicator {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.15);
-    transition: all 0.3s ease;
+    background-color: #757575;
+    transition: background-color 0.3s ease;
   }
   
-  /* Live indicator dot styling - simplified */
   .live-indicator.is-live {
-    background: #10b981;
+    background-color: #4CAF50;
+  }
+  
+  .live-indicator.is-replay {
+    background-color: #ffc107;
+  }
+  
+  .live-indicator.is-offline {
+    background-color: #757575;
   }
   
   .streamer-details {
@@ -652,5 +664,18 @@
   
   .list-content::-webkit-scrollbar-thumb:hover {
     background: var(--secondary-text, rgba(255, 255, 255, 0.2));
+  }
+  
+  .streamer-item.status-live {
+    /* Styles for live streamers, e.g., border, background subtle hint */
+    /* border-left: 3px solid #4CAF50; */
+  }
+  .streamer-item.status-replay {
+    /* Styles for replay streamers */
+    /* border-left: 3px solid #ffc107; */
+  }
+  .streamer-item.status-offline {
+    /* Styles for offline streamers */
+    /* opacity: 0.8; */
   }
   </style>

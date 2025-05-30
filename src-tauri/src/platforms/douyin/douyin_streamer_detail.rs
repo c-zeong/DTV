@@ -92,19 +92,28 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
 
     let current_status = room_data_entry.status;
 
-    if room_data_entry.status != 2 && room_data_entry.status != 4 { 
+    // If the streamer is not live (status != 2), we should still return their basic info
+    // but with no stream_url and a relevant message or no error if it's just for info.
+    // For the follows list, we just need the status and basic info.
+    if current_status != 2 {
+        println!("[Douyin Live RS INFO] Streamer status is {} (not live). Returning info without stream URL.", current_status);
         return Ok(crate::platforms::common::LiveStreamInfo {
             title: room_data_entry.title.clone(),
             anchor_name: main_data.user.as_ref().and_then(|u| u.nickname.clone()),
             avatar: main_data.user.as_ref().and_then(|u| u.avatar_thumb.as_ref()).and_then(|at| at.url_list.as_ref()).and_then(|ul| ul.first().cloned()),
-            stream_url: None,
+            stream_url: None, // Explicitly None as not live
             status: Some(current_status),
-            error_message: Some(format!("Stream is not live or replay (status: {}).", current_status)),
+            error_message: None, // No error, just not live for streaming purposes. Client can interpret status.
         });
     }
 
+    // Only proceed to get stream_url_container if the streamer is live (status == 2)
     let stream_url_container = room_data_entry.stream_url_container.as_ref()
-        .ok_or_else(|| "No stream_url object in room data".to_string())?;
+        .ok_or_else(|| {
+            // This case should ideally not be hit if status is 2, but as a fallback:
+            println!("[Douyin Live RS WARN] Streamer status is 2 (live) but no stream_url_container found. This is unexpected.");
+            "Stream is live but stream URL container is missing".to_string()
+        })?;
 
     let mut final_stream_url: Option<String> = None;
 

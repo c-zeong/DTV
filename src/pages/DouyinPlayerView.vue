@@ -18,6 +18,7 @@
       :platform="mainPlayerComputedProps.platform" 
       :is-followed="mainPlayerComputedProps.isFollowed" 
       :is-live="mainPlayerComputedProps.isLive"
+      :initial-error="mainPlayerComputedProps.initialError"
       @follow="handleFollow" 
       @unfollow="handleUnfollow" 
       @close-player="handleClosePlayer" 
@@ -65,18 +66,19 @@ const streamError = ref<string | null>(null);
 
 // Props for MainPlayer
 const mainPlayerComputedProps = computed(() => {
-  // We need streamInfo to be populated, but stream_url can be null/undefined if not found or not live.
-  // StreamError existing should prevent player rendering or show an error within player.
-  if (!streamInfo.value || streamError.value) { 
-    // If there is a streamError, or streamInfo is not yet loaded, MainPlayer should not get props.
-    // This allows the error/loading states in DouyinPlayerView to take precedence.
+  if (!streamInfo.value) { 
     return null; 
   }
+
+  // If streamError is set AND it's NOT '主播未开播', then DouyinPlayerView shows its own error message.
+  // Otherwise, we let MainPlayer handle it (either play or show '主播未开播' UI).
+  if (streamError.value && !streamError.value.includes('主播未开播')) {
+    return null;
+  }
   
-  const isLive = streamInfo.value.status === 2;
+  const isActuallyLive = streamInfo.value.status === 2 && !!streamInfo.value.stream_url;
 
   return {
-    // stream_url can be null here, MainPlayer will need to handle it (e.g., show error or no video)
     streamUrl: streamInfo.value.stream_url, 
     title: streamInfo.value.title,
     anchorName: streamInfo.value.anchor_name, 
@@ -84,7 +86,9 @@ const mainPlayerComputedProps = computed(() => {
     roomId: props.roomId, 
     platform: Platform.DOUYIN, 
     isFollowed: isFollowed.value,
-    isLive: isLive 
+    isLive: isActuallyLive,
+    // Pass the specific "主播未开播" error to MainPlayer if it occurred at this stage
+    initialError: streamError.value && streamError.value.includes('主播未开播') ? streamError.value : null,
   };
 });
 
@@ -108,16 +112,18 @@ const fetchDouyinStreamDetails = async () => {
         streamInfo.value = result; // Stream is live and URL is present
         streamError.value = null;
       } else {
+        // Live but no stream URL, this is an error condition for playback
         streamError.value = "直播中，但未能获取到有效的直播流地址。";
         streamInfo.value = result; // Store other info even if stream_url is missing
       }
     } else { // Not live (status is not 2) or status is null/undefined
-      let statusMessage = '主播未开播。';
-      if (result.status !== undefined && result.status !== null) {
-        statusMessage = `主播当前状态 (${result.status})，未开播。`;
-      }
-      streamError.value = statusMessage;
-      streamInfo.value = result; // Store other info (like title, avatar) for display
+      let statusMessage = '主播未开播。'; // Default offline message
+      // Optionally refine message based on exact status if needed, but keep it simple for now
+      // if (result.status !== undefined && result.status !== null) {
+      //   statusMessage = `主播当前状态 (${result.status})，未开播。`;
+      // }
+      streamError.value = statusMessage; // This will be '主播未开播。'
+      streamInfo.value = result; // Store other info (like title, avatar) for display by MainPlayer
     }
   } catch (error: any) {
     console.error('[DouyinPlayerView] Error fetching Douyin stream details:', error);

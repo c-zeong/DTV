@@ -11,17 +11,22 @@ export enum Platform {
   // Add other platforms here
 }
 
+export type LiveStatus = 'LIVE' | 'REPLAY' | 'OFFLINE' | 'UNKNOWN';
+
 export interface BaseStreamer {
   platform: Platform;
   id: string; // Platform-specific ID, e.g., roomId
   nickname: string;
   avatarUrl: string;
   displayName?: string; // Optional, if different from nickname
+  isLive?: boolean | null;
+  liveStatus?: LiveStatus;
+  lastUpdated?: number;
+  isPinned?: boolean;
 }
 
 export interface LiveStreamer extends BaseStreamer {
   roomTitle: string;
-  isLive: boolean;
   viewerCount?: number;
   categoryName?: string;
   previewImageUrl?: string; // For live list previews
@@ -29,8 +34,7 @@ export interface LiveStreamer extends BaseStreamer {
 
 export interface FollowedStreamer extends BaseStreamer {
   roomTitle?: string; // May not always be available or up-to-date for offline followed streamers
-  isLive?: boolean;   // Can be updated periodically
-  // Add any other specific fields for followed streamers
+  followedAt?: number;
 }
 
 // This can be a union type if details vary significantly between platforms
@@ -53,6 +57,8 @@ export interface StreamerDetails {
   categoryName?: string;
   viewerCount?: number;
   errorMessage?: string | null; // Add optional errorMessage field
+  platformSpecific?: Record<string, any>;
+  liveStatus?: LiveStatus;
   // Add any other fields commonly used by UI components
 }
 

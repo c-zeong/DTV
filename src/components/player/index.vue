@@ -24,7 +24,33 @@
           <div class="spinner"></div>
           <p>加载直播流中...</p>
         </div>
-        <div v-else-if="streamError" class="error-player">
+        <div v-else-if="isOfflineError" class="offline-player">
+          <!-- Display StreamerInfo if room details are available -->
+          <StreamerInfo 
+            v-if="props.roomId && props.platform"
+            :room-id="props.roomId"
+            :platform="props.platform"
+            :title="props.title"
+            :anchor-name="props.anchorName"
+            :avatar="props.avatar"
+            :is-live="false" 
+            :is-followed="props.isFollowed"
+            @follow="$emit('follow', $event)"
+            @unfollow="$emit('unfollow', $event)"
+            class="streamer-info-offline"
+          />
+          <div class="offline-message">
+            <div class="offline-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 16.427A4.002 4.002 0 0 0 12.005 20a4 4 0 0 0-3.995-3.573M12 12V2M8.5 7L7 5.5M15.5 7l1.5-1.5M5.562 10.223l-1.842.511M18.438 10.223l1.842.511M12 2a3.5 3.5 0 0 1 3.5 3.5V12H8.5V5.5A3.5 3.5 0 0 1 12 2z"/>
+                <line x1="1" y1="1" x2="23" y2="23" stroke-width="2"></line> 
+              </svg>
+            </div>
+            <h3>{{ streamError }}</h3>
+            <p>主播当前未开播，请稍后再来。</p>
+          </div>
+        </div>
+        <div v-else-if="streamError && !isOfflineError" class="error-player">
           <div class="error-icon">
              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <circle cx="12" cy="12" r="10"></circle>
@@ -95,6 +121,7 @@ const props = defineProps<{
   anchorName?: string | null;
   avatar?: string | null;
   isLive?: boolean | null;
+  initialError?: string | null; // Added to accept pre-determined errors like "主播未开播"
 }>();
 
 const emit = defineEmits<{
@@ -112,16 +139,27 @@ let unlistenDanmakuFn: (() => void) | null = null;
 
 const isLoadingStream = ref(true);
 const streamError = ref<string | null>(null);
+const isOfflineError = ref(false); // Added to track '主播未开播' state
 
 const isInNativeFullscreen = ref(false);
 const isInWebFullscreen = ref(false);
 const isFullScreen = ref(false); // True if either native or web fullscreen is active
 
 async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, pStreamUrlProp?: string | null) {
-  console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}`);
+  console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}, InitialError=${props.initialError}`);
   isLoadingStream.value = true;
   streamError.value = null;
+  isOfflineError.value = false; 
   danmakuMessages.value = [];
+
+  // Handle initialError from props (e.g., Douyin pre-check says "主播未开播")
+  if (props.initialError && props.initialError.includes('主播未开播')) {
+    console.log(`[Player] Handling initialError: ${props.initialError}`);
+    streamError.value = props.initialError;
+    isOfflineError.value = true;
+    isLoadingStream.value = false;
+    return; // Skip further initialization if streamer is known to be offline
+  }
 
   if (art.value) {
     console.log('[Player] Destroying existing ArtPlayer instance.');
@@ -307,9 +345,16 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
       // console.log(`[Player] Web fullscreen handler: Emitted fullscreen-change: ${isFullScreen.value}`); // Optional
     });
 
-  } catch (e: any) {
-    console.error(`[Player] Error initializing player or stream for ${pPlatform}/${pRoomId}:`, e);
-    streamError.value = e.message || '初始化播放器或获取直播流失败。';
+  } catch (error: any) {
+    console.error(`[Player] Error initializing stream for ${pPlatform} room ${pRoomId}:`, error);
+    const errorMessage = error.message || '加载直播流失败，请稍后再试。';
+    if (errorMessage.includes('主播未开播')) {
+      streamError.value = errorMessage; // Store the specific "主播未开播" message
+      isOfflineError.value = true;       // Set the flag for custom display
+    } else {
+      streamError.value = errorMessage;
+      isOfflineError.value = false;
+    }
     isLoadingStream.value = false;
   }
 }
@@ -385,49 +430,51 @@ const retryInitialization = () => {
   }
 };
 
-watch(() => [props.roomId, props.platform, props.streamUrl], async ([newRoomId, newPlatform, newStreamUrl], [oldRoomId, oldPlatformValue, oldStreamUrl]) => {
-  console.log(`[Player] Watch: New=${newRoomId}(${newPlatform}), URL=${newStreamUrl}. Old=${oldRoomId}(${oldPlatformValue})`);
-  
-  const oldPlatform = oldPlatformValue as Platform;
-
-  if (newRoomId && newPlatform) {
-    if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== oldStreamUrl && newStreamUrl)) {
-      console.log('[Player] Critical props changed. Stopping old resources and re-initializing.');
-      if (oldRoomId && oldPlatform) { 
-        await stopCurrentDanmakuListener(oldPlatform, oldRoomId);
-        if (oldPlatform === Platform.DOUYU) {
-          console.log('[Player] Watcher: old platform was Douyu, stopping proxy.');
-          await stopDouyuProxy();
-        }
+watch([() => props.roomId, () => props.platform, () => props.streamUrl], 
+  async ([newRoomId, newPlatform, newStreamUrl], [oldRoomId, oldPlatform, oldStreamUrl]) => {
+    if (newRoomId && newPlatform) {
+      // Always reset isOfflineError when props change significantly
+      isOfflineError.value = false; 
+      if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== oldStreamUrl)) {
+         console.log(`[Player] Props changed. Re-initializing player for ${newPlatform} room ${newRoomId}.`);
+        initializePlayerAndStream(newRoomId, newPlatform, newStreamUrl);
       }
-      await initializePlayerAndStream(newRoomId, newPlatform as Platform, newStreamUrl); 
+    } else if (!newRoomId && art.value) { 
+      console.log('[Player] No newRoomId, stopping and clearing player.');
+      if (oldRoomId && oldPlatform) { 
+          await stopCurrentDanmakuListener(oldPlatform, oldRoomId);
+          if (oldPlatform === Platform.DOUYU) {
+              console.log('[Player] Watcher clearing player: old platform was Douyu, stopping proxy.');
+              await stopDouyuProxy(); 
+          }
+      } else {
+          console.log('[Player] No oldRoomId/oldPlatform to stop danmaku/proxy for.');
+      }
+      if (art.value.playing) art.value.pause();
+      art.value.destroy(false);
+      art.value = null;
+      isLoadingStream.value = false;
+      danmakuMessages.value = [];
+      streamError.value = null;
+      isOfflineError.value = false; // Clear offline error state
     }
-  } else if (!newRoomId && art.value) { 
-    console.log('[Player] No newRoomId, stopping and clearing player.');
-    if (oldRoomId && oldPlatform) { 
-        await stopCurrentDanmakuListener(oldPlatform, oldRoomId);
-        if (oldPlatform === Platform.DOUYU) {
-            console.log('[Player] Watcher clearing player: old platform was Douyu, stopping proxy.');
-            await stopDouyuProxy(); 
-        }
-    } else {
-        console.log('[Player] No oldRoomId/oldPlatform to stop danmaku/proxy for.');
-    }
-    if (art.value.playing) art.value.pause();
-    art.value.destroy(false);
-    art.value = null;
-    isLoadingStream.value = false;
-    danmakuMessages.value = [];
-    streamError.value = null;
-  }
-}, { immediate: false });
+}, 
+{ immediate: true }
+);
 
 onMounted(async () => {
   console.log(`[Player] Mounted. RoomID: ${props.roomId}, Platform: ${props.platform}, URL: ${props.streamUrl}`);
-  if (props.roomId && props.platform) {
-    await initializePlayerAndStream(props.roomId, props.platform, props.streamUrl);
-  } else {
-    console.log('[Player] Mounted without RoomID/Platform. Player will be empty.');
+  // The immediate watcher should handle the initial call to initializePlayerAndStream
+  // if props.roomId and props.platform are present at mount.
+  // No need to call it explicitly here again.
+  if (!props.roomId || !props.platform) {
+    console.log('[Player] Mounted without RoomID/Platform. Player will be empty or show initial error if provided.');
+    // If initialError is '主播未开播', the watcher might not run if roomId/platform are missing,
+    // but the template handles isOfflineError directly. Let's ensure isLoading is false.
+    if (props.initialError && props.initialError.includes('主播未开播')) {
+      streamError.value = props.initialError;
+      isOfflineError.value = true;
+    }
     isLoadingStream.value = false;
   }
 });
@@ -780,5 +827,45 @@ onUnmounted(async () => {
     height: 200px;
     border-radius: 12px;
   }
+}
+
+.offline-player {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 40px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.offline-message {
+  margin-top: 20px;
+}
+
+.offline-icon svg {
+  color: #727272; /* A softer color for the icon */
+  margin-bottom: 16px;
+}
+
+.offline-player h3 {
+  font-size: 1.4em;
+  color: #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.offline-player p {
+  font-size: 1em;
+  color: #a0a0a0;
+}
+
+.streamer-info-offline {
+  width: 100%;
+  max-width: 700px; /* Limit width of streamer info bar */
+  margin-bottom: 30px;
+  /* Add styles to ensure it looks good above the offline message */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 20px;
 }
 </style>
