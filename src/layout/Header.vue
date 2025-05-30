@@ -4,36 +4,62 @@
       <div class="search-box">
         <input 
           v-model="searchQuery" 
-          placeholder="搜索斗鱼主播..." 
+          placeholder="搜索斗鱼主播 / 抖音房间ID" 
           @input="handleSearch"
           @focus="showResults = true"
           @blur="handleBlur"
           class="search-input"
         />
-        <button class="search-button" @click="doSearch">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <button class="search-button" @click="doSearch" :disabled="isLoadingSearch">
+          <svg v-if="!isLoadingSearch" width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M7.333 12.667A5.333 5.333 0 1 0 7.333 2a5.333 5.333 0 0 0 0 10.667zM14 14l-4-4" 
                   stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
+          <div v-else class="mini-spinner"></div>
         </button>
       </div>
       
-      <div v-show="showResults && searchResults.length > 0" class="search-results">
-        <div v-for="anchor in searchResults" 
-             :key="anchor.roomId"
-             class="search-result-item"
-             @mousedown="selectAnchor(anchor)"
-        >
-          <div class="result-avatar">
-            <img v-if="anchor.avatar" :src="anchor.avatar" :alt="anchor.userName">
-            <div v-else class="avatar-placeholder">{{ anchor.userName[0] }}</div>
-          </div>
-          <div class="result-info">
-            <div class="result-name">{{ anchor.userName }}</div>
-            <div class="result-status" :class="{ 'is-live': anchor.liveStatus }">
-              {{ anchor.liveStatus ? '直播中' : '未开播' }}
+      <div v-show="showResults" class="search-results-wrapper">
+        <div v-if="isLoadingSearch" class="search-loading">搜索中...</div>
+        <div v-else-if="searchError" class="search-error-message">{{ searchError }}</div>
+        <div v-else-if="searchResults.length > 0" class="search-results-list">
+          <div v-for="anchor in searchResults" 
+              :key="anchor.platform + '-' + anchor.roomId"
+              class="search-result-item"
+              @mousedown="selectAnchor(anchor)"
+          >
+            <div class="result-avatar">
+              <img v-if="anchor.avatar" :src="anchor.avatar" :alt="anchor.userName" class="avatar-img">
+              <div v-else class="avatar-placeholder">{{ anchor.userName[0] }}</div>
             </div>
+            
+            <div class="result-main-content">
+              <div class="result-line-1-main">
+                <span class="result-name" :title="anchor.userName">{{ anchor.userName }}</span>
+                <span class="live-status-badge styled-badge" :class="{ 'is-live': anchor.liveStatus }">
+                  {{ anchor.liveStatus ? '直播中' : '未开播' }}
+                </span>
+              </div>
+              <div class="result-line-2-main">
+                <span class="result-room-title" :title="anchor.roomTitle || '无标题'">
+                  {{ anchor.roomTitle || '无直播标题' }}
+                </span>
+                <span class="result-roomid styled-badge">
+                  ID: {{ anchor.roomId }}
+                </span>
+              </div>
+            </div>
+
+            <div class="result-meta-right">
+              <span class="platform-tag styled-badge" :class="anchor.platform.toLowerCase()">
+                {{ anchor.platform === Platform.DOUYU ? '斗鱼' : (anchor.platform === Platform.DOUYIN ? '抖音' : anchor.platform) }}
+              </span>
+            </div>
+
           </div>
+        </div>
+        <div v-else-if="searchQuery.trim() && !isLoadingSearch && !searchError" class="search-no-results">
+            无匹配结果。
         </div>
       </div>
     </div>
@@ -52,13 +78,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import type { LiveAnchorItem } from '../types/streamer';
 import { invoke } from '@tauri-apps/api/core';
+import { Platform } from '../platforms/common/types';
+
+interface DouyinApiStreamInfo {
+  title?: string | null;
+  anchor_name?: string | null;
+  avatar?: string | null;
+  status?: number | null;
+  error_message?: string | null;
+}
+
+interface SearchResultItem {
+  platform: Platform;
+  roomId: string;
+  userName: string;
+  roomTitle?: string | null;
+  avatar: string | null;
+  liveStatus: boolean;
+  fansCount?: string;
+  category?: string;
+  rawStatus?: number | null;
+}
 
 const searchQuery = ref('');
-const searchResults = ref<LiveAnchorItem[]>([]);
+const searchResults = ref<SearchResultItem[]>([]);
 const showResults = ref(false);
+const searchError = ref<string | null>(null);
+const isLoadingSearch = ref(false);
 const isDark = ref(false);
 
 const emit = defineEmits(['themeChange', 'selectAnchor']);
@@ -69,73 +118,138 @@ const handleSearch = () => {
   if (searchTimeout) {
     clearTimeout(searchTimeout);
   }
+  searchError.value = null;
+  isLoadingSearch.value = true;
   
   searchTimeout = window.setTimeout(() => {
-    performSearch();
-  }, 300);
+    performSearchBasedOnInput();
+  }, 500);
 };
 
-const performSearch = async () => {
-  if (!searchQuery.value.trim()) {
+const performSearchBasedOnInput = async () => {
+  const query = searchQuery.value.trim();
+  if (!query) {
     searchResults.value = [];
     showResults.value = false;
+    isLoadingSearch.value = false;
     return;
   }
 
-  try {
-    const response = await invoke<string>('search_anchor', { 
-      keyword: searchQuery.value 
-    });
-    
-    const data = JSON.parse(response);
+  const douyinIdRegex = /^\d{10,}$/;
 
-    if (data.error === 0) {
+  if (douyinIdRegex.test(query)) {
+    await performDouyinIdSearch(query);
+  } else {
+    await performDouyuSearch(query);
+  }
+  isLoadingSearch.value = false;
+};
+
+const performDouyinIdSearch = async (userInputRoomId: string) => {
+  searchResults.value = [];
+  searchError.value = null;
+  isLoadingSearch.value = true;
+  try {
+    const payloadData = { args: { room_id_str: userInputRoomId } };
+    const douyinInfo = await invoke<DouyinApiStreamInfo>('get_douyin_live_stream_url', {
+      payload: payloadData,
+    });
+    isLoadingSearch.value = false;
+    if (douyinInfo) {
+      if (douyinInfo.error_message) {
+        searchError.value = douyinInfo.error_message;
+      } else if (douyinInfo.anchor_name) {
+        const isLive = douyinInfo.status === 2;
+        searchResults.value = [{
+          platform: Platform.DOUYIN,
+          roomId: userInputRoomId,
+          userName: douyinInfo.anchor_name || '未知抖音主播',
+          roomTitle: douyinInfo.title || null,
+          avatar: douyinInfo.avatar || null,
+          liveStatus: isLive,
+          rawStatus: douyinInfo.status,
+        }];
+      } else {
+        searchError.value = '没有找到该抖音主播或房间信息不完整。';
+      }
+    } else {
+      searchError.value = '未能获取抖音房间信息。';
+    }
+  } catch (e: any) {
+    isLoadingSearch.value = false;
+    searchError.value = typeof e === 'string' ? e : '搜索抖音主播失败，请检查网络或ID。';
+  }
+  showResults.value = true;
+};
+
+const performDouyuSearch = async (keyword: string) => {
+  searchResults.value = [];
+  searchError.value = null;
+  isLoadingSearch.value = true;
+  try {
+    const response = await invoke<string>('search_anchor', { keyword });
+    isLoadingSearch.value = false;
+    const data = JSON.parse(response);
+    if (data.error === 0 && data.data && data.data.relateUser) {
       searchResults.value = data.data.relateUser
         .filter((item: any) => item.type === 1)
-        .map((item: any) => {
+        .map((item: any): SearchResultItem => {
           const anchorInfo = item.anchorInfo;
           const isReallyLive = anchorInfo.isLive === 1 && anchorInfo.videoLoop !== 1;
           return {
+            platform: Platform.DOUYU,
             roomId: anchorInfo.rid.toString(),
             userName: anchorInfo.nickName,
+            roomTitle: anchorInfo.roomName || anchorInfo.description || null,
             avatar: anchorInfo.avatar,
             liveStatus: isReallyLive,
             fansCount: anchorInfo.fansNumStr,
             category: anchorInfo.cateName,
-            description: anchorInfo.description
           };
         });
-      showResults.value = true;
+      if (searchResults.value.length === 0) {
+        searchError.value = '没有找到相关斗鱼主播。';
+      } else {
+        searchError.value = null;
+      }
+    } else {
+      searchError.value = '搜索斗鱼主播失败或无结果。';
     }
   } catch (e) {
-    console.error('搜索失败:', e);
-    searchResults.value = [];
+    isLoadingSearch.value = false;
+    searchError.value = '搜索斗鱼主播时发生错误。';
   }
+  showResults.value = true;
 };
 
 const doSearch = () => {
   if (searchTimeout) {
     clearTimeout(searchTimeout);
   }
-  performSearch();
+  isLoadingSearch.value = true;
+  performSearchBasedOnInput();
 };
 
 const handleBlur = () => {
   setTimeout(() => {
-    showResults.value = false;
-  }, 200);
+    if (!isLoadingSearch.value && !searchError.value) {
+       showResults.value = false;
+    }
+  }, 300);
 };
 
-const selectAnchor = async (anchor: LiveAnchorItem) => {
+const selectAnchor = (anchor: SearchResultItem) => {
   emit('selectAnchor', {
-    id: parseInt(anchor.roomId),
-    name: anchor.userName,
-    category: anchor.category || '',
-    isLive: anchor.liveStatus,
-    roomId: anchor.roomId
+    id: anchor.roomId,
+    platform: anchor.platform,
+    nickname: anchor.userName,
+    avatarUrl: anchor.avatar,
   });
-  searchQuery.value = anchor.userName;
+  searchQuery.value = '';
+  searchResults.value = [];
+  searchError.value = null;
   showResults.value = false;
+  isLoadingSearch.value = false;
 };
 
 const toggleTheme = () => {
@@ -145,24 +259,19 @@ const toggleTheme = () => {
   emit('themeChange', isDark.value);
 };
 
-// 初始化主题
 const initTheme = () => {
-  // 先检查本地存储
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme) {
     isDark.value = savedTheme === 'dark';
   } else {
-    // 如果没有保存的主题，则使用系统主题
     isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
   document.body.classList.toggle('dark-mode', isDark.value);
 };
 
-// 监听系统主题变化
 const watchSystemTheme = () => {
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   mediaQuery.addEventListener('change', (e) => {
-    // 只有在没有保存的主题时才跟随系统
     if (!localStorage.getItem('theme')) {
       isDark.value = e.matches;
       document.body.classList.toggle('dark-mode', isDark.value);
@@ -212,7 +321,7 @@ onMounted(() => {
   border: none;
   background: transparent;
   color: var(--text-color);
-  font-size: 14px;
+  font-size: 13px;
   width: 100%;
 }
 
@@ -258,65 +367,90 @@ onMounted(() => {
   color: var(--toggle-hover-color);
 }
 
-.search-results {
+.search-results-wrapper {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 2px);
   left: 0;
   right: 0;
-  margin-top: 8px;
-  background: var(--component-bg);
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 24px var(--shadow-color);
-  max-height: 360px;
-  overflow-y: auto;
+  background: var(--dropdown-bg, #2c2f38);
+  border: 1px solid var(--border-color, #3a3f4b);
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
   z-index: 1000;
-  /* 自定义滚动条样式 */
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  &::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-  }
-  
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-color, var(--toggle-color, #5a5e6b)) var(--scrollbar-track-color, var(--search-bg, #222429));
+}
+
+.search-results-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.search-results-wrapper::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-color, var(--search-bg, #222429));
+  border-radius: 3px;
+}
+
+.search-results-wrapper::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-color, var(--toggle-color, #5a5e6b));
+  border-radius: 3px;
+  border: 1px solid var(--scrollbar-track-color, var(--search-bg, #222429));
+}
+
+.search-results-wrapper::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover-color, var(--primary-text, #8c909c));
+}
+
+.search-results-list {
+}
+
+.search-loading,
+.search-error-message,
+.search-no-results {
+  padding: 12px 16px;
+  color: var(--text-secondary-color, #aaa);
+  text-align: center;
+  font-size: 13px;
+  background-color: transparent;
+}
+
+.search-error-message {
+  color: var(--error-color, #ff6b6b);
 }
 
 .search-result-item {
   display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  gap: 12px;
+  align-items: flex-start;
+  padding: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 8px;
+  background-color: var(--card-bg-search-item, var(--component-bg));
+  margin-bottom: 6px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-
 .search-result-item:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .search-result-item:hover {
-  background: var(--card-hover-bg);
+  background-color: var(--card-hover-bg-search-item, var(--hover-bg));
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.08);
 }
 
 .result-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
   overflow: hidden;
+  margin-right: 10px;
   flex-shrink: 0;
 }
 
-.result-avatar img {
+.avatar-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -325,50 +459,122 @@ onMounted(() => {
 .avatar-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #3a7bd5, #00d2ff);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 14px;
+  background-color: var(--placeholder-bg, #555);
+  color: var(--text-color, #fff);
+  font-weight: bold;
+  font-size: 16px;
 }
 
-.result-info {
-  flex: 1;
+.result-main-content {
+  flex-grow: 1;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin-right: 8px;
+}
+
+.result-line-1-main {
+  display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .result-name {
+  font-weight: 600;
+  color: var(--text-color, #fff);
   font-size: 14px;
-  color: var(--primary-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
 }
 
-.result-status {
-  font-size: 12px;
+.styled-badge {
+  font-size: 10px;
+  font-weight: 500;
   padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--meta-bg);
-  color: var(--secondary-text);
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.3;
 }
 
-.result-status.is-live {
-  background: rgba(33, 150, 243, 0.15);
-  color: #2196f3;
+.platform-tag {
+  color: #ffffff;
 }
 
-/* 深色模式下的样式 */
-:root.dark-mode .result-status.is-live {
-  background: rgba(33, 150, 243, 0.2);
-  color: #64b5f6;
+.platform-tag.douyu {
+  background-color: #ff7f0e;
+}
+
+.platform-tag.douyin {
+  background-color: #20c997;
+}
+
+.live-status-badge {
+  color: var(--text-color-on-badge, #fff);
+  background-color: var(--status-offline-bg, #94a3b8);
+}
+
+.live-status-badge.is-live {
+  background-color: var(--status-live-bg, #10b981);
+  color: var(--text-color-on-badge-live, #fff);
+}
+
+.result-line-2-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.result-room-title {
+  font-size: 12px;
+  color: var(--secondary-text, #a0a0a0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  margin-right: 8px;
+}
+
+.result-roomid {
+  color: var(--secondary-text, #a0a0a0);
+  background-color: var(--meta-bg, rgba(128,128,128,0.1));
+}
+
+.result-meta-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  text-align: right;
+  height: 100%;
+}
+
+.mini-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mini-spin 0.75s linear infinite;
+  margin: auto;
+}
+
+@keyframes mini-spin {
+  to { transform: rotate(360deg); }
 }
 </style>
 
 <style>
-/* 全局主题变量 */
 :root {
-  /* 浅色主题 */
   --header-bg: #ffffff;
   --main-bg: #f5f7fa;
   --component-bg: #ffffff;
@@ -376,56 +582,54 @@ onMounted(() => {
   --card-hover-bg: #f8fafc;
   --card-border: #e2e8f0;
   
-  /* 边框和分割线 */
   --border-color: #e2e8f0;
   
-  /* 文本颜色 */
   --text-color: #334155;
   --primary-text: #334155;
   --secondary-text: #64748b;
   
-  /* 搜索框 */
   --search-bg: #f1f5f9;
   --search-focus-bg: #e2e8f0;
   
-  /* 主题切换按钮 */
   --toggle-bg: #f1f5f9;
   --toggle-color: #64748b;
   --toggle-hover-bg: #e2e8f0;
   --toggle-hover-color: #334155;
   
-  /* 搜索结果 */
   --result-bg: #ffffff;
   --result-hover-bg: #f8fafc;
   --result-border: #e2e8f0;
   
-  /* 状态指示器 */
   --status-offline: #94a3b8;
   --status-live: #10b981;
   
-  /* 按钮 */
   --button-bg: #f1f5f9;
   --button-hover-bg: #e2e8f0;
   --button-text: #64748b;
   --button-hover-text: #334155;
   
-  /* 阴影 */
   --shadow-color: rgba(51, 65, 85, 0.08);
   --shadow-lg: 0 4px 12px var(--shadow-color);
   
-  /* 交互元素 */
   --hover-transition: all 0.2s ease;
   --active-state: #e2e8f0;
   
-  /* 徽章 */
   --badge-bg: rgba(33, 150, 243, 0.1);
   --badge-text: #2196F3;
   
-  /* 元信息背景 */
   --meta-bg: #e2e8f0;
+  --card-bg-search-item: var(--component-bg);
+  --card-hover-bg-search-item: var(--hover-bg);
+  --status-offline-bg: #94a3b8;
+  --status-live-bg: #10b981;
+  --text-color-on-badge: #ffffff;
+  --text-color-on-badge-live: #ffffff;
+  
+  --scrollbar-track-color: var(--search-bg, #f1f5f9);
+  --scrollbar-thumb-color: var(--toggle-color, #64748b);
+  --scrollbar-thumb-hover-color: var(--primary-text, #334155);
 }
 
-/* 深色主题 */
 .dark-mode {
   --header-bg: #1a1b1e;
   --border-color: rgba(255, 255, 255, 0.1);
@@ -439,31 +643,32 @@ onMounted(() => {
   --result-bg: #1a1b1e;
   --result-hover-bg: rgba(255, 255, 255, 0.05);
   --result-border: rgba(255, 255, 255, 0.1);
-  /* 组件背景色 */
   --component-bg: #1a1b1e;
-  /* 主窗口背景色 */
   --main-bg: #000000;
-  /* 卡片样式 */
   --card-bg: rgba(255, 255, 255, 0.03);
   --card-hover-bg: rgba(255, 255, 255, 0.05);
   --card-border: rgba(255, 255, 255, 0.05);
-  /* 文本颜色 */
   --primary-text: #ffffff;
-  /* 状态颜色 */
   --status-offline: rgba(255, 255, 255, 0.2);
-  /* 按钮颜色 */
   --button-bg: rgba(255, 255, 255, 0.05);
   --button-hover-bg: rgba(255, 255, 255, 0.1);
   --button-text: rgba(255, 255, 255, 0.8);
   --button-hover-text: #ffffff;
-  /* 阴影 */
   --shadow-color: rgba(0, 0, 0, 0.3);
   
-  /* 徽章 */
   --badge-bg: rgba(33, 150, 243, 0.2);
   --badge-text: #64b5f6;
   
-  /* 元信息背景 */
   --meta-bg: rgba(255, 255, 255, 0.05);
+  --card-bg-search-item: rgba(255, 255, 255, 0.03);
+  --card-hover-bg-search-item: rgba(255, 255, 255, 0.07);
+  --status-offline-bg: rgba(148, 163, 184, 0.5);
+  --status-live-bg: rgba(16, 185, 129, 0.6);
+  --text-color-on-badge: #e5e7eb;
+  --text-color-on-badge-live: #ffffff;
+  
+  --scrollbar-track-color: var(--search-bg, #1a1b1e);
+  --scrollbar-thumb-color: #555555;
+  --scrollbar-thumb-hover-color: #777777;
 }
 </style>

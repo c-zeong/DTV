@@ -192,7 +192,7 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
     const artPlayerOptions = {
         container: playerContainerRef.value, 
         url: streamConfig.streamUrl,
-        type: streamConfig.streamType,
+        type: 'flv',
         isLive: true, pip: true, autoplay: true, autoSize: true, aspectRatio: true,
         fullscreen: true, fullscreenWeb: true, miniProgressBar: true, mutex: true,
         backdrop: false, playsInline: true, autoPlayback: true, theme: '#FB7299', lang: 'zh-cn',
@@ -205,7 +205,6 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         ],
         controls: [],
         customType: {
-            ...(streamConfig.streamType === 'flv' ? {
             flv: function(video: HTMLVideoElement, url: string) {
                 // Capture pPlatform for logging within this function's scope
                 const platformForLog = pPlatform; 
@@ -232,70 +231,6 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
                     streamError.value = '加载FLV播放组件失败。'; 
                 });
             }
-            } : {}),
-            ...(streamConfig.streamType === 'hls' ? {
-              hls: function (video: HTMLVideoElement, url: string) {
-                // Capture pPlatform for logging within this function's scope
-                const platformForLog = pPlatform; 
-                console.log(`[Player ${platformForLog}] Custom HLS type handler called for URL:`, url);
-                if (Hls.isSupported()) {
-                  console.log(`[Player ${platformForLog}] hls.js is supported.`);
-                  const hlsConfig = {
-                    debug: true, // Enable hls.js debug logging
-                    // --- Optimizations for faster start-up ---
-                    startFragPrefetch: true, // Try to prefetch segments aggressively
-                    maxBufferLength: 15,     // Reduce target buffer length (default 30s)
-                    // maxMaxBufferLength: 30, // Corresponds to maxBufferLength
-                    // Consider liveSyncDurationCount or liveMaxLatencyDurationCount for live streams if issues arise
-                    // --- End Optimizations ---
-                    // Other hls.js specific configurations can be added here if needed
-                    // e.g., xhrSetup: function(xhr, url) { xhr.withCredentials = true; } for CORS issues
-                  };
-                  console.log(`[Player ${platformForLog}] hls.js config:`, hlsConfig);
-                  const hls = new Hls(hlsConfig);
-                  console.log(`[Player ${platformForLog}] hls.js instance created. Loading source:`, url);
-                  hls.loadSource(url);
-                  console.log(`[Player ${platformForLog}] Attaching media element.`);
-                  hls.attachMedia(video);
-                  
-                  hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
-                    console.log(`[hls.js ${platformForLog}] Manifest parsed successfully. Levels:`, data.levels);
-                    video.play().catch(e => console.error(`[Player ${platformForLog}] HLS Auto-play error after manifest parsed:`, e));
-                  });
-
-                  hls.on(Hls.Events.LEVEL_LOADED, function(event, data) {
-                    console.log(`[hls.js ${platformForLog}] Level ${data.level} loaded. Details:`, data.details);
-                  });
-
-                  hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                      console.error(`[hls.js ${platformForLog}] Fatal error: `, data);
-                      streamError.value = `HLS错误: ${data.details} (type: ${data.type})`;
-                    } else {
-                      console.warn(`[hls.js ${platformForLog}] Non-fatal error: `, data);
-                    }
-                  });
-                  
-                  // It's often better to initiate play after MANIFEST_PARSED or a similar event.
-                  // However, Artplayer might handle this, or immediate play might be intended.
-                  // video.play().catch(e => console.error(`[Player ${platformForLog}] HLS Auto-play error:`, e));
-                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                  console.log(`[Player ${platformForLog}] Native HLS playback supported (e.g., Safari). Setting src to:`, url);
-                  video.src = url;
-                  video.addEventListener('loadedmetadata', function() {
-                    console.log(`[Player ${platformForLog}] Native HLS metadata loaded. Attempting to play.`);
-                    video.play().catch(e => console.error(`[Player ${platformForLog}] Native HLS Auto-play error:`, e));
-                  });
-                  video.addEventListener('error', function(e) {
-                     console.error(`[Player ${platformForLog}] Native HLS video element error:`, e);
-                     streamError.value = '浏览器原生HLS播放失败。';
-                  });
-                } else {
-                  console.error(`[Player ${platformForLog}] Browser does not support HLS playback (hls.js or native).`);
-                  streamError.value = '浏览器不支持HLS播放。';
-                }
-              }
-            } : {}),
         },
     };
     console.log(`[Player] Creating Artplayer with options:`, artPlayerOptions);

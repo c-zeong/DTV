@@ -98,14 +98,15 @@
     font-size: 1rem;
     font-weight: 600;
     color: #ffffff;
-    margin: 0; /* Removed bottom margin, using gap from parent */
-    line-height: 1.4; /* Adjusted line height */
+    margin: 0;
+    line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     letter-spacing: 0.2px;
+    text-align: left; /* Ensure room title is left-aligned */
   }
   
   .streamer-meta-row {
@@ -325,10 +326,16 @@
   const avatarUrl = computed(() => roomDetails.value?.avatarUrl ?? props.avatar ?? null)
   const computedViewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
   const computedIsLive = computed(() => {
+    // If internal roomDetails are available and have an isLive status, use that first.
+    if (roomDetails.value && roomDetails.value.isLive !== undefined && roomDetails.value.isLive !== null) {
+      return roomDetails.value.isLive;
+    }
+    // Otherwise, fallback to the prop if it's defined.
     if (props.isLive !== undefined && props.isLive !== null) {
       return props.isLive;
     }
-    return roomDetails.value?.isLive ?? false;
+    // Default fallback
+    return false;
   })
   const computedCategoryName = computed(() => roomDetails.value?.categoryName ?? 'N/A')
   

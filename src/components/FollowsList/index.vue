@@ -126,11 +126,7 @@
     }
   };
 
-  const streamers = computed(() => {
-    return [...props.followedAnchors].sort((a, b) => {
-      return getLiveStatusSortOrder(a.liveStatus) - getLiveStatusSortOrder(b.liveStatus);
-    });
-  });
+  const streamers = computed(() => props.followedAnchors);
   
   // Method to determine class for the list item itself
   const getStreamerItemClass = (streamer: FollowedStreamer) => {
@@ -268,18 +264,13 @@
               updatedStreamerData = await refreshDouyinFollowedStreamer(streamer);
             } else {
               console.warn(`Unsupported platform for refresh: ${streamer.platform}`);
-              return streamer; // Return original if platform unsupported for refresh
+              return streamer;
             }
-
-            // Merge original streamer data with updates. Updates take precedence.
             return {
               ...streamer,
               ...updatedStreamerData,
-            } as FollowedStreamer; // Cast as FollowedStreamer, assuming helpers provide compatible partials
-
+            } as FollowedStreamer;
           } catch (e) {
-            // Error at the level of refreshing a single streamer (already logged in helpers)
-            // Return the original streamer data so it's not lost from the list
             console.error(`[FollowsList] Error during refresh for ${streamer.platform}/${streamer.id}, returning original:`, e);
             return streamer; 
           }
@@ -289,13 +280,19 @@
       const validUpdates = updates.filter((update: FollowedStreamer | undefined): update is FollowedStreamer => !!update && typeof update.id !== 'undefined');
       
       if (validUpdates.length > 0) {
-        const hasChanged = JSON.stringify(validUpdates) !== JSON.stringify(props.followedAnchors);
+        const sortedUpdates = [...validUpdates].sort((a, b) => {
+          const statusOrderA = getLiveStatusSortOrder(a.liveStatus);
+          const statusOrderB = getLiveStatusSortOrder(b.liveStatus);
+          return statusOrderA - statusOrderB;
+        });
+        
+        const hasChanged = JSON.stringify(sortedUpdates) !== JSON.stringify(props.followedAnchors);
 
         if (hasChanged) {
-          emit('reorderList', validUpdates); 
-          console.log('[FollowsList] Data changed, emitted reorderList with updates.');
+          emit('reorderList', sortedUpdates); 
+          console.log('[FollowsList] Data changed, emitted reorderList with sorted updates.');
         } else {
-          console.log('[FollowsList] Data fetched, but no changes detected compared to current list.');
+          console.log('[FollowsList] Data fetched, but no changes detected after sorting that would alter current list.');
         }
       }
     } finally {

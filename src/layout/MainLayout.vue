@@ -90,10 +90,6 @@ const handleFullscreenChange = (isFullscreen: boolean) => {
   console.log('Main layout received fullscreen change:', isFullscreen)
   isPlayerFullscreen.value = isFullscreen
 }
-
-onMounted(() => {
-  // No longer needed here if store handles its own loading or it's done in main.ts
-})
 </script>
 
 <style scoped>

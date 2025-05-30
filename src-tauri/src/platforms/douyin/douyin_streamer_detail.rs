@@ -3,6 +3,7 @@ use crate::platforms::douyin::models::*;
 use crate::platforms::douyin::utils::setup_douyin_cookies;
 use reqwest::header::REFERER; // For setting referer for the API call
 use tauri::command;
+use reqwest; // 确保 reqwest 被导入
 // use serde::Deserialize; // Removed unused import
 // use crate::platforms::common::GetStreamUrlPayload; // Will use full path
 // use crate::platforms::common::LiveStreamInfo; // Will use full path
@@ -160,18 +161,59 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
         println!("[Douyin Live RS INFO] live_core_sdk_data is None in stream_url_container.");
     }
 
-    // If an FLV URL was found from sdk_data, check if it's a valid "pull-flv" URL.
-    // If not, discard it so we fall back to HLS from hls_pull_url_map.
-    if let Some(ref url) = final_stream_url {
-        if !url.contains("pull-flv") {
-            println!("[Douyin Live RS INFO] FLV URL from sdk_data ('{}') does not contain 'pull-flv'. Discarding and attempting HLS from hls_pull_url_map.", url);
-            final_stream_url = None; // Discard, so HLS will be attempted next
+    // If an FLV URL was found from sdk_data, process it.
+    // It might need a redirect if it doesn't contain "pull-flv".
+    if let Some(initial_flv_url_candidate) = final_stream_url.clone() { // 使用 clone 来获取 owned String
+        if initial_flv_url_candidate.contains("pull-flv") {
+            println!("[Douyin Live RS INFO] 初始 FLV URL 来自 sdk_data，已包含 'pull-flv': {}. 将使用此链接.", initial_flv_url_candidate);
+            // final_stream_url 已经是 Some(initial_flv_url_candidate)，无需更改
         } else {
-            println!("[Douyin Live RS INFO] Valid FLV URL from sdk_data with 'pull-flv' found: {}. Will use this stream.", url);
+            println!("[Douyin Live RS INFO] 初始 FLV URL ('{}') 不含 'pull-flv'. 尝试解析重定向.", initial_flv_url_candidate);
+            
+            // 为重定向解析构建 HTTP 客户端
+            let client_result = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none()) // 禁止自动重定向
+                .build();
+
+            match client_result {
+                Ok(http_client_for_redirect) => {
+                    match http_client_for_redirect.get(&initial_flv_url_candidate).send().await {
+                        Ok(response) => {
+                            if response.status().is_redirection() { // 检查是否为重定向状态
+                                if let Some(location_header) = response.headers().get(reqwest::header::LOCATION) {
+                                    if let Ok(redirected_url_str) = location_header.to_str() {
+                                        println!("[Douyin Live RS INFO] 重定向到: {}. 将此作为最终 FLV URL.", redirected_url_str);
+                                        final_stream_url = Some(redirected_url_str.to_string());
+                                        // 成功获取新链接，不需要在新链接中检查 "pull-flv"
+                                    } else {
+                                        println!("[Douyin Live RS WARN] 转换 Location header 为字符串失败. 放弃 FLV URL.");
+                                        final_stream_url = None;
+                                    }
+                                } else {
+                                    println!("[Douyin Live RS WARN] 重定向响应中未找到 Location header. 放弃 FLV URL.");
+                                    final_stream_url = None;
+                                }
+                            } else {
+                                println!("[Douyin Live RS WARN] 请求 '{}' 未导致重定向 (状态: {}). 放弃 FLV URL.", initial_flv_url_candidate, response.status());
+                                final_stream_url = None;
+                            }
+                        }
+                        Err(e) => {
+                            println!("[Douyin Live RS WARN] 解析 '{}' 的重定向请求失败: {}. 放弃 FLV URL.", initial_flv_url_candidate, e);
+                            final_stream_url = None;
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("[Douyin Live RS WARN] 构建 reqwest 客户端用于重定向失败: {}. 放弃 FLV URL.", e);
+                    final_stream_url = None;
+                }
+            }
         }
     }
+    // 如果 final_stream_url 在此之后为 None (由于上述逻辑或初始就为None), 则会尝试 HLS
 
-    // If no valid FLV stream (with "pull-flv") was found from sdk_data, try HLS stream from hls_pull_url_map
+    // If no valid FLV stream (with "pull-flv" or successfully redirected) was found from sdk_data, try HLS stream from hls_pull_url_map
     if final_stream_url.is_none() {
         println!("[Douyin Live RS INFO] No valid FLV stream from sdk_data, or it was discarded. Attempting HLS from hls_pull_url_map.");
         if let Some(hls_map) = &stream_url_container.hls_pull_url_map {

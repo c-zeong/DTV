@@ -5,6 +5,7 @@ import { Ref } from 'vue';
 import { Platform } from '../common/types';
 import type { DanmakuMessage } from '../../components/player/types'; // Corrected path
 import { fetchStreamPlaybackDetails } from '../common/apiService';
+import { parseDouyuDanmakuMessage } from './parsers'; // <-- Import the parser
 
 // Specific type for Douyu's raw danmaku payload from Rust event
 export interface DouyuRustDanmakuPayload {
@@ -95,41 +96,44 @@ export async function startDouyuDanmakuListener(
 
   const unlisten = await listen<DouyuRustDanmakuPayload>(eventName, (event: TauriEvent<DouyuRustDanmakuPayload>) => {
     if (artInstance && artInstance.plugins.artplayerPluginDanmuku && event.payload) {
-      const douyuP = event.payload;
-      let frontendDanmaku: DanmakuMessage | null = null;
+      // const douyuP = event.payload; // Old raw payload
+      // let frontendDanmaku: DanmakuMessage | null = null; // Old logic
 
-      if (douyuP.type === "chatmsg") {
-        frontendDanmaku = {
-          nickname: douyuP.nickname || '未知用户',
-          content: douyuP.content || '',
-          level: String(douyuP.level || '0'),
-          badgeName: douyuP.badgeName || undefined,
-          badgeLevel: douyuP.badgeLevel && douyuP.badgeLevel !== "0" ? String(douyuP.badgeLevel) : undefined,
-          color: douyuP.color || '#FFFFFF',
-          uid: douyuP.uid,
-          room_id: douyuP.room_id,
-        };
-      } else if (douyuP.type === "uenter") {
-        frontendDanmaku = {
-          nickname: '系统消息',
-          content: `${douyuP.nickname || '用户'} 进入直播间`,
-          level: '0',
-          color: '#A9A9A9',
-          uid: douyuP.uid,
-          room_id: douyuP.room_id,
-        };
-      }
+      // Call the parser, which handles filtering of 'uenter'
+      const commonDanmaku = parseDouyuDanmakuMessage(event.payload);
 
-      if (frontendDanmaku) {
+      if (commonDanmaku) { // Check if the message was not filtered out
+        // Adapt CommonDanmakuMessage to the structure ArtPlayer or DanmuList expects, if necessary
+        // For now, assuming CommonDanmakuMessage structure is compatible or direct fields are used.
+        // The important part is that 'uenter' messages result in commonDanmaku being null.
+
         artInstance.plugins.artplayerPluginDanmuku.emit({
-          text: frontendDanmaku.content,
-          color: frontendDanmaku.color || '#FFFFFF',
+          text: commonDanmaku.content, // Use content from parsed message
+          color: commonDanmaku.color || '#FFFFFF', // Use color from parsed message
+          // ArtPlayer might have other fields, ensure commonDanmaku provides them or defaults are fine
         });
-        danmakuMessagesRef.value.push(frontendDanmaku);
+
+        // Push the parsed and validated CommonDanmakuMessage to the list
+        // Ensure the DanmuList component is compatible with CommonDanmakuMessage structure
+        // or adapt it here. For simplicity, let's assume direct compatibility for critical fields.
+        const displayDanmaku: DanmakuMessage = { // Adapting to DanmuList's expected DanmakuMessage type
+            nickname: commonDanmaku.sender.nickname,
+            content: commonDanmaku.content,
+            level: commonDanmaku.sender.level ? String(commonDanmaku.sender.level) : '0',
+            badgeName: commonDanmaku.sender.badgeName,
+            badgeLevel: commonDanmaku.sender.badgeLevel ? String(commonDanmaku.sender.badgeLevel) : undefined,
+            color: commonDanmaku.color,
+            uid: commonDanmaku.sender.uid,
+            room_id: roomId, // roomId is available in this scope
+            // id and timestamp are part of CommonDanmakuMessage but might not be directly used by DanmuList's item display
+        };
+        danmakuMessagesRef.value.push(displayDanmaku);
+        
         if (danmakuMessagesRef.value.length > 200) { // Manage danmaku array size
             danmakuMessagesRef.value.splice(0, danmakuMessagesRef.value.length - 200);
         }
       }
+      // If commonDanmaku is null (e.g., 'uenter' type), it's implicitly skipped here.
     } else {
       console.log('[DouyuPlayerHelper] Danmaku received, but Artplayer or plugin not ready or no payload.');
     }

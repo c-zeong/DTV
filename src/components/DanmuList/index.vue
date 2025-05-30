@@ -198,14 +198,17 @@
   }
   
   .danmu-item {
-    background: linear-gradient(to right, rgba(0,0,0,0.2), rgba(0,0,0,0.1));
-    padding: 8px 12px; /* Adjusted padding */
-    border-radius: 8px; /* Slightly less rounded for a more structured look */
-    margin-bottom: 8px; /* Spacing between items */
+    text-align: left;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.1);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    margin-bottom: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     transition: transform 0.15s ease-out, background-color 0.15s ease;
-    display: flex; /* Changed to flex */
-    flex-direction: column; /* Stack meta and content lines */
+    display: flex;
+    flex-direction: column;
     max-width: 100%; 
   }
   
@@ -215,29 +218,27 @@
   }
   
   .danmu-meta-line {
+    font-size: 0.8rem;
+    color: var(--secondary-text, #aaa);
+    margin-bottom: 2px;
     display: flex;
     align-items: center;
-    margin-bottom: 4px;
-    flex-wrap: nowrap; 
-    max-width: 100%;
-    overflow: hidden; /* 隐藏溢出内容 */
-    text-overflow: ellipsis; /* 使用省略号 */
-    white-space: nowrap; /* 确保不换行 */
+    flex-wrap: wrap;
   }
   
   .danmu-badge {
     background-color: var(--tag-bg, #FB7299); 
     color: #ffffff; 
-    padding: 2px 6px; /* Adjusted padding */
-    border-radius: 4px; /* Slightly more defined badge corners */
+    padding: 2px 6px;
+    border-radius: 4px;
     font-size: 0.7rem; 
-    margin-right: 8px; /* Increased margin */
+    margin-right: 8px;
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    height: auto; /* Auto height for badge based on content */
-    line-height: normal; /* Normal line height */
-    flex-shrink: 0; /* Prevent badge from shrinking */
+    height: auto;
+    line-height: normal;
+    flex-shrink: 0;
   }
   
   .badge-name {
@@ -245,40 +246,34 @@
   }
   
   .badge-level {
-    margin-left: 4px; /* Adjusted margin */
+    margin-left: 4px;
     font-weight: bold;
     font-size: 0.65rem; 
   }
   
   .danmu-user {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 160px; /* 最大宽度限制 */
     font-weight: 500;
-    margin-right: 6px;
-    color: #DDDDDD;
-    font-size: 0.8rem;
+    margin-right: 5px;
   }
   
   .user-level {
-    font-size: 0.7rem; /* Adjusted size */
+    font-size: 0.7rem;
     color: var(--meta-text, #ababab); 
-    margin-right: 5px; /* Adjusted margin */
+    margin-right: 5px;
   }
   
   .danmu-content-line {
-    /* This div will ensure content starts on a new line */
+    font-size: 0.85rem;
+    line-height: 1.4;
   }
   
   .danmu-content {
     color: var(--primary-text-light, #f0f0f0); 
     white-space: pre-wrap; 
-    word-wrap: break-word; /* Ensure long words break */
-    overflow-wrap: break-word; /* Alternative for word breaking */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
     font-size: 0.875rem; 
     line-height: 1.4;
-    /* The content will naturally take the width of .danmu-item */
   }
   
   /* Custom scrollbar styling (optional, WebKit browsers) */

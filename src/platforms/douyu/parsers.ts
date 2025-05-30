@@ -57,9 +57,9 @@ export function parseDouyuDanmakuMessage(rawPayload: any): CommonDanmakuMessage 
       commonType = 'chat';
       break;
     case 'uenter':
-      commonType = 'enter';
-      content = `${rawPayload.nickname || '用户'} 进入直播间`; // Create content for enter messages
-      break;
+      // commonType = 'enter';
+      // content = `${rawPayload.nickname || '用户'} 进入直播间`; // Create content for enter messages
+      return null; // Filter out 'uenter' messages
     case 'gifttransform': // Example: Douyu gift type
     case 'dgb':
       commonType = 'gift';
