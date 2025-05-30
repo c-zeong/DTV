@@ -95,12 +95,15 @@ export async function startDouyuDanmakuListener(
   console.log(`[DouyuPlayerHelper] Setting up event listener for: ${eventName}`);
 
   const unlisten = await listen<DouyuRustDanmakuPayload>(eventName, (event: TauriEvent<DouyuRustDanmakuPayload>) => {
+    console.log(`[DouyuPlayerHelper] Event received on ${eventName}:`, JSON.stringify(event.payload)); // Log received event payload
+
     if (artInstance && artInstance.plugins.artplayerPluginDanmuku && event.payload) {
       // const douyuP = event.payload; // Old raw payload
       // let frontendDanmaku: DanmakuMessage | null = null; // Old logic
 
       // Call the parser, which handles filtering of 'uenter'
       const commonDanmaku = parseDouyuDanmakuMessage(event.payload);
+      console.log(`[DouyuPlayerHelper] Parsed commonDanmaku for ${eventName}:`, commonDanmaku ? JSON.stringify(commonDanmaku) : 'null'); // Log parsed danmaku
 
       if (commonDanmaku) { // Check if the message was not filtered out
         // Adapt CommonDanmakuMessage to the structure ArtPlayer or DanmuList expects, if necessary

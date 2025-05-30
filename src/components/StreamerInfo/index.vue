@@ -19,9 +19,9 @@
         </div>
   
         <div class="streamer-actions">
-          <div class="id-follow-container" :class="{ 'highlight-moves-to-id': isFollowing }">
-            <span class="streamer-id" :class="{ 'text-active-on-highlight': isFollowing }">ID:{{ props.roomId }}</span>
-            <button class="follow-btn" :class="{ 'text-active-on-highlight': !isFollowing, 'is-following': isFollowing }" @click="toggleFollow">
+          <div class="id-follow-container" ref="idFollowContainerRef" :class="{ 'highlight-moves-to-id': isFollowing }">
+            <span class="streamer-id" ref="streamerIdRef" :class="{ 'text-active-on-highlight': isFollowing }">ID:{{ props.roomId }}</span>
+            <button class="follow-btn" ref="followBtnRef" :class="{ 'text-active-on-highlight': !isFollowing, 'is-following': isFollowing }" @click="toggleFollow">
               <span class="follow-icon-wrapper">
                 <span class="follow-icon icon-add" v-if="!isFollowing">
                   <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12.998h-6v6h-2v-6H5v-2h6v-6h2v6h6z"/></svg>
@@ -138,6 +138,11 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
     background-color: #2c2f38; /* Base container background */
     position: relative; /* For the pseudo-element */
+    /* CSS variables for dynamic highlight, to be set by JS */
+    --id-width: 100px; /* Default/initial value */
+    --button-width: 80px; /* Default/initial value */
+    --highlight-left: calc(100px + 1px); /* Default to button highlight */
+    --highlight-width: calc(80px - 2px); /* Default to button highlight */
   }
   
   /* The sliding highlight pseudo-element */
@@ -147,58 +152,56 @@
     top: 2px; /* Small inset from container edges */
     bottom: 2px;
     height: calc(100% - 4px); /* Full height within insets */
-    /* Width and Left are dynamic based on active segment */
     background-color: #FB7299; /* Accent color */
     z-index: 0; /* Behind text and icons */
     border-radius: 4px; /* Rounded corners for the highlight pill itself */
-    transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Optimized bounce & duration */
-    /* Initial state: highlight on button (right side, 40% width) */
-    left: calc(60% + 1px); 
-    width: calc(40% - 2px); 
+    transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+    /* Dynamic positioning via CSS variables */
+    left: var(--highlight-left);
+    width: var(--highlight-width);
   }
   
-  .id-follow-container.highlight-moves-to-id::before {
-    /* Target state: highlight on ID (left side, 60% width) */
-    left: 2px; 
-    width: calc(60% - 4px); 
-  }
+  /* .id-follow-container.highlight-moves-to-id::before logic will be handled by JS updating CSS vars */
   
   .streamer-id,
   .follow-btn {
-    background-color: transparent !important; /* CRITICAL: Must be transparent to see pseudo-element */
-    padding: 6px 10px; /* Slightly reduced horizontal padding too for compactness */
+    background-color: transparent !important; 
+    padding: 6px 10px; 
     font-weight: 500;
     display: flex; 
     align-items: center;
-    justify-content: center; /* Center content within each segment */
-    /* flex: 1; Replaced by specific flex values below */
-    position: relative; /* To ensure text/icons are above pseudo-element */
+    justify-content: center; 
+    position: relative; 
     z-index: 1;
-    transition: color 0.2s ease-in-out 0.1s; /* Slight delay for text color change */
-    cursor: default; 
-    border: none; /* Ensure no borders on either by default */
+    transition: color 0.2s ease-in-out 0.1s; 
+    border: none; 
   }
   
   .follow-btn {
     cursor: pointer;
-    flex: 2; /* Button takes 2 parts of flex space */
-    min-width: 60px; /* 添加最小宽度，确保"关注"两个字可以在一行显示 */
-    white-space: nowrap; /* 防止文本换行 */
+    /* flex: 2; Removed */
+    width: 80px; /* Fixed width */
+    min-width: 80px; /* Ensure it doesn't shrink below this */
+    white-space: nowrap; 
+    color: #9098a3; 
+    border-top-right-radius: 6px; 
+    border-bottom-right-radius: 6px;
+    font-size: 0.8rem; 
   }
   
   .streamer-id {
-    color: #9098a3; /* Neutral default */
-    border-top-left-radius: 6px; /* Match container */
+    color: #9098a3; 
+    border-top-left-radius: 6px; 
     border-bottom-left-radius: 6px;
-    font-size: 0.75rem; /* Base size for "ID:" */
-    flex: 3; /* ID takes 3 parts of flex space */
-  }
-  
-  .follow-btn {
-    color: #9098a3; /* Neutral default */
-    border-top-right-radius: 6px; /* Match container */
-    border-bottom-right-radius: 6px;
-    font-size: 0.8rem; /* Keep follow button text size */
+    font-size: 0.75rem; 
+    /* flex: 3; Removed */
+    flex-grow: 1; /* Allow to grow */
+    flex-shrink: 1; /* Allow to shrink */
+    min-width: 80px; /* Minimum width same as button */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap; /* Ensure ID text itself doesn't wrap */
+    cursor: default; 
   }
   
   .streamer-id.text-active-on-highlight,
@@ -295,7 +298,7 @@
   </style>
   
   <script setup lang="ts">
-  import { ref, computed, onMounted, watch } from 'vue'
+  import { ref, computed, onMounted, watch, onUpdated, nextTick } from 'vue'
   import { Platform } from '../../platforms/common/types'
   import type { StreamerDetails } from '../../platforms/common/types'
   import { fetchDouyuStreamerDetails } from '../../platforms/douyu/streamerInfoParser'
@@ -323,7 +326,7 @@
   
   const computedRoomTitle = computed(() => roomDetails.value?.roomTitle ?? props.title ?? '直播间标题加载中...')
   const computedNickname = computed(() => roomDetails.value?.nickname ?? props.anchorName ?? '主播昵称加载中...')
-  const avatarUrl = computed(() => roomDetails.value?.avatarUrl ?? props.avatar ?? null)
+  const avatarUrl = ref(props.avatar || '')
   const computedViewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
   const computedIsLive = computed(() => {
     // If internal roomDetails are available and have an isLive status, use that first.
@@ -424,26 +427,44 @@
     showAvatarText.value = true
   }
   
+  const idFollowContainerRef = ref<HTMLElement | null>(null);
+  const streamerIdRef = ref<HTMLElement | null>(null);
+  const followBtnRef = ref<HTMLElement | null>(null);
+  
+  const updateHighlightVars = () => {
+    if (idFollowContainerRef.value && streamerIdRef.value && followBtnRef.value) {
+      const idWidth = streamerIdRef.value.offsetWidth;
+      const buttonWidth = followBtnRef.value.offsetWidth;
+
+      idFollowContainerRef.value.style.setProperty('--id-width', `${idWidth}px`);
+      idFollowContainerRef.value.style.setProperty('--button-width', `${buttonWidth}px`);
+
+      if (isFollowing.value) {
+        idFollowContainerRef.value.style.setProperty('--highlight-left', '2px');
+        idFollowContainerRef.value.style.setProperty('--highlight-width', `calc(${idWidth}px - 4px)`);
+      } else {
+        idFollowContainerRef.value.style.setProperty('--highlight-left', `calc(${idWidth}px + 2px)`);
+        idFollowContainerRef.value.style.setProperty('--highlight-width', `calc(${buttonWidth}px - 4px)`);
+      }
+    }
+  };
+  
   onMounted(() => {
     fetchRoomDetails()
+    nextTick(() => {
+      updateHighlightVars();
+    });
   })
   
-  // Watch for prop changes to re-fetch details if roomId or platform changes
   watch(() => [props.roomId, props.platform], (newValues, oldValues) => {
     if (newValues[0] !== oldValues[0] || newValues[1] !== oldValues[1]) {
       console.log('[StreamerInfo] Props (roomId or platform) changed, re-fetching details.')
       fetchRoomDetails()
     }
-  }, { deep: true }) // Use deep watch if props might be objects, though roomId/platform are primitives
+  }, { deep: true })
 
-  // Watch for direct prop changes for Douyin that might update details without a full fetch, if needed.
-  // However, the current getDouyinStreamerDetails re-evaluates based on props passed to it,
-  // and fetchRoomDetails is called on platform change. If title/anchorName/avatar for Douyin
-  // can change *while the component is mounted for the same Douyin room*, this watch might be useful.
   watch(() => [props.title, props.anchorName, props.avatar], async (newValues, oldValues) => {
     if (props.platform === Platform.DOUYIN) {
-      // If any of these props change for an active Douyin streamer, re-evaluate roomDetails.
-      // This avoids a full "fetch" but updates the locally constructed details.
       const hasChanged = newValues.some((val, index) => val !== oldValues[index])
       if (hasChanged) {
         console.log('[StreamerInfo] Douyin props (title, anchorName, or avatar) changed, re-evaluating Douyin details.')
@@ -453,10 +474,21 @@
           initialAnchorName: props.anchorName,
           initialAvatar: props.avatar,
         })
-        // Handle avatar fallback logic again if avatarUrl might have changed
         showAvatarText.value = !avatarUrl.value
       }
     }
+  })
+
+  watch([() => props.roomId, () => props.platform, isFollowing], () => {
+    nextTick(() => {
+      updateHighlightVars();
+    });
+  }, { deep: true })
+
+  onUpdated(() => {
+    nextTick(() => {
+      updateHighlightVars();
+    });
   })
 
   </script>

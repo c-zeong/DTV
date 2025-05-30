@@ -133,6 +133,7 @@ const emit = defineEmits<{
 
 const playerContainerRef = ref<HTMLDivElement | null>(null);
 const art = shallowRef<Artplayer | null>(null);
+const flvPlayerInstance = shallowRef<any>(null);
 const danmakuMessages = ref<DanmakuMessage[]>([]);
 const isDanmakuListenerActive = ref(false); // Tracks if a danmaku listener is supposed to be running
 let unlistenDanmakuFn: (() => void) | null = null;
@@ -164,8 +165,20 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
   if (art.value) {
     console.log('[Player] Destroying existing ArtPlayer instance.');
     await stopCurrentDanmakuListener(props.platform, props.roomId); 
+    
+    // 销毁 mpegts.js 实例
+    if (flvPlayerInstance.value) {
+        try {
+            flvPlayerInstance.value.destroy();
+            console.log('[Player] Destroyed mpegts.js player instance before new Artplayer.');
+        } catch (e) {
+            console.error('[Player] Error destroying mpegts.js player:', e);
+        }
+        flvPlayerInstance.value = null;
+    }
+
     if (art.value.playing) art.value.pause();
-    art.value.destroy(false);
+    art.value.destroy(false); 
     art.value = null;
   }
 
@@ -193,39 +206,50 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         container: playerContainerRef.value, 
         url: streamConfig.streamUrl,
         type: 'flv',
-        isLive: true, pip: true, autoplay: true, autoSize: true, aspectRatio: true,
+        isLive: true, pip: true, autoplay: true, autoSize: false, aspectRatio: false,
         fullscreen: true, fullscreenWeb: true, miniProgressBar: true, mutex: true,
         backdrop: false, playsInline: true, autoPlayback: true, theme: '#FB7299', lang: 'zh-cn',
         moreVideoAttr: { playsInline: true },
         plugins: [
             artplayerPluginDanmuku({
             danmuku: [], speed: 7, opacity: 1, fontSize: 20, color: '#FFFFFF',
-            mode: 0, margin: [10, '2%'], antiOverlap: true, synchronousPlayback: false,
+            mode: 0, margin: [10, '2%'], antiOverlap: true, synchronousPlayback: false, emitter:false
             }),
         ],
         controls: [],
         customType: {
             flv: function(video: HTMLVideoElement, url: string) {
-                // Capture pPlatform for logging within this function's scope
                 const platformForLog = pPlatform; 
                 import('mpegts.js').then(mpegts => {
-                if (mpegts.default.isSupported()) {
-                    console.log(`[Player ${platformForLog}] mpegts.js is supported. Initializing FLV player for URL:`, url);
-                    const flvPlayer = mpegts.default.createPlayer(
-                    { type: 'flv', url: url, isLive: true, cors: true, hasAudio: true, hasVideo: true }, 
-                    {}
-                    );
-                    flvPlayer.attachMediaElement(video);
-                    flvPlayer.load();
-                    video.play().catch(e => console.error(`[Player ${platformForLog}] FLV Auto-play error:`, e));
-                    flvPlayer.on('error', (errType, errInfo) => {
-                    console.error(`[mpegts ${platformForLog}] Error:`, errType, errInfo);
-                    streamError.value = `FLV组件错误: ${errInfo.msg}`;
-                    });
-                } else {
-                    console.error(`[Player ${platformForLog}] Browser does not support FLV playback (mpegts.js).`);
-                    streamError.value = '浏览器不支持FLV播放。';
-                }
+                    if (mpegts.default.isSupported()) {
+                        // 如果之前有实例，再次检查并销毁 (双重保险，主要销毁点在 Artplayer 销毁前)
+                        if (flvPlayerInstance.value) {
+                            try {
+                                flvPlayerInstance.value.destroy();
+                                console.log('[Player] Destroyed previous mpegts.js player instance within customType.flv.');
+                            } catch (e) {
+                                console.error('[Player] Error destroying previous mpegts.js player in customType.flv:', e);
+                            }
+                            flvPlayerInstance.value = null;
+                        }
+
+                        console.log(`[Player ${platformForLog}] mpegts.js is supported. Initializing FLV player for URL:`, url);
+                        const flvPlayer = mpegts.default.createPlayer(
+                            { type: 'flv', url: url, isLive: true, cors: true, hasAudio: true, hasVideo: true }, 
+                            {}
+                        );
+                        flvPlayerInstance.value = flvPlayer; // <--- 保存新实例
+                        flvPlayer.attachMediaElement(video);
+                        flvPlayer.load();
+                        video.play().catch(e => console.error(`[Player ${platformForLog}] FLV Auto-play error:`, e));
+                        flvPlayer.on('error', (errType, errInfo) => {
+                            console.error(`[mpegts ${platformForLog}] Error:`, errType, errInfo);
+                            streamError.value = `FLV组件错误: ${errInfo.msg}`;
+                        });
+                    } else {
+                        console.error(`[Player ${platformForLog}] Browser does not support FLV playback (mpegts.js).`);
+                        streamError.value = '浏览器不支持FLV播放。';
+                    }
                 }).catch((e) => { 
                     console.error(`[Player ${platformForLog}] Failed to load mpegts.js component:`, e);
                     streamError.value = '加载FLV播放组件失败。'; 
@@ -385,8 +409,20 @@ watch([() => props.roomId, () => props.platform, () => props.streamUrl],
       } else {
           console.log('[Player] No oldRoomId/oldPlatform to stop danmaku/proxy for.');
       }
+      
+      // 销毁 mpegts.js 实例 (当房间关闭导致播放器清理时)
+      if (flvPlayerInstance.value) {
+          try {
+              flvPlayerInstance.value.destroy();
+              console.log('[Player] Destroyed mpegts.js player instance in watcher (room closed).');
+          } catch (e) {
+              console.error('[Player] Error destroying mpegts.js player in watcher:', e);
+          }
+          flvPlayerInstance.value = null;
+      }
+
       if (art.value.playing) art.value.pause();
-      art.value.destroy(false);
+      art.value.destroy(false); // art.value.destroy(true) on unmount for full cleanup
       art.value = null;
       isLoadingStream.value = false;
       danmakuMessages.value = [];
@@ -425,10 +461,21 @@ onUnmounted(async () => {
       await stopDouyuProxy();
   }
 
+  // 销毁 mpegts.js 实例
+  if (flvPlayerInstance.value) {
+      try {
+          flvPlayerInstance.value.destroy();
+          console.log('[Player] Destroyed mpegts.js player instance on unmount.');
+      } catch (e) {
+          console.error('[Player] Error destroying mpegts.js player on unmount:', e);
+      }
+      flvPlayerInstance.value = null;
+  }
+
   if (art.value) {
     console.log('[Player] Unmounting: Destroying ArtPlayer instance.');
     if (art.value.playing) art.value.pause();
-    art.value.destroy(true);
+    art.value.destroy(true); // true to remove video element and all listeners
     art.value = null;
   }
   danmakuMessages.value = []; 

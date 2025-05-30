@@ -87,43 +87,68 @@
   const handleScroll = () => {
     if (!danmakuListEl.value) return;
     const el = danmakuListEl.value;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight > 50) {
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 50;
+    console.log('[DanmuList] handleScroll - scrollHeight:', el.scrollHeight, 'scrollTop:', el.scrollTop, 'clientHeight:', el.clientHeight, 'isNearBottom:', isNearBottom);
+    if (!isNearBottom) {
       userScrolled.value = true;
+      console.log('[DanmuList] handleScroll - userScrolled set to true');
     } else {
       userScrolled.value = false;
+      console.log('[DanmuList] handleScroll - userScrolled set to false');
     }
   };
   
   const scrollToBottom = () => {
+    console.log('[DanmuList] scrollToBottom called. autoScroll:', autoScroll.value, 'userScrolled:', userScrolled.value);
     nextTick(() => {
       if (danmakuListEl.value && autoScroll.value && !userScrolled.value) {
         const el = danmakuListEl.value;
+        console.log('[DanmuList] scrollToBottom - Attempting to scroll. scrollHeight:', el.scrollHeight, 'current scrollTop:', el.scrollTop);
         el.scrollTop = el.scrollHeight;
+        console.log('[DanmuList] scrollToBottom - scrollTop set to:', el.scrollTop);
+      } else {
+        console.log('[DanmuList] scrollToBottom - Conditions not met for scrolling.');
       }
     });
   };
 
   watch(autoScroll, (newValue) => {
+    console.log('[DanmuList] autoScroll changed to:', newValue);
     if (newValue) {
-      userScrolled.value = false;
+      userScrolled.value = false; // When autoScroll is turned on, reset userScrolled
+      console.log('[DanmuList] autoScroll watcher - userScrolled reset to false');
       scrollToBottom();
     }
   });
   
-  // Watch the messages prop to scroll to bottom when new messages arrive
   watch(() => props.messages, (newMessages, oldMessages) => {
-    if (newMessages && oldMessages && newMessages.length > oldMessages.length) {
-      scrollToBottom();
-    }
-  }, { deep: true }); // deep watch might be needed if individual message objects change, though length check is often enough
+    const oldLength = oldMessages ? oldMessages.length : 0;
+    const newLength = newMessages ? newMessages.length : 0;
+    console.log(`[DanmuList] props.messages watcher - oldLength: ${oldLength}, newLength: ${newLength}`);
+    
+    const effectivelyNewMessages = newMessages && (newLength > oldLength);
+    console.log('[DanmuList] props.messages watcher - effectivelyNewMessages:', effectivelyNewMessages);
 
-  // Watch for roomId changes to clear scroll state if needed (though messages prop handles data)
-  watch(() => props.roomId, () => {
-      userScrolled.value = false; // Reset scroll state on room change
-      autoScroll.value = true; // Default to auto scroll for new room
+    if (effectivelyNewMessages) {
+      console.log('[DanmuList] props.messages watcher - New messages detected. autoScroll:', autoScroll.value, 'userScrolled:', userScrolled.value);
+      if (autoScroll.value && !userScrolled.value) {
+        scrollToBottom();
+      }
+    }
+  }, { deep: true });
+
+  watch(() => props.roomId, (newRoomId, oldRoomId) => {
+      console.log(`[DanmuList] props.roomId changed from ${oldRoomId} to ${newRoomId}`);
+      userScrolled.value = false; 
+      autoScroll.value = true; 
+      console.log('[DanmuList] props.roomId watcher - userScrolled set to false, autoScroll set to true');
       nextTick(() => {
-        if (danmakuListEl.value) danmakuListEl.value.scrollTop = 0; // Scroll to top for new room, then auto-scroll will take over if messages come in
-        scrollToBottom(); // Attempt to scroll to bottom immediately if there are messages for the new room
+        if (danmakuListEl.value) {
+          console.log('[DanmuList] props.roomId watcher - Resetting scrollTop to 0 for new room.');
+          danmakuListEl.value.scrollTop = 0; 
+        }
+        // No need to call scrollToBottom() here if list is empty, messages watcher will handle it.
+        // If there are initial messages for the new room, the messages watcher should pick that up.
       });
   });
   

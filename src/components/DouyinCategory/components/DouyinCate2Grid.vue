@@ -137,19 +137,31 @@ const animateHeightChange = (targetExpandedState: boolean) => {
   isAnimating.value = true;
   const content = cate2ContentRef.value;
   const targetHeightValue = getCurrentTargetHeight(targetExpandedState);
-  content.style.height = `${targetHeightValue}px`;
+
+  // 新增逻辑: 处理从 'auto' 高度收起的情况
+  if (!targetExpandedState && content.style.height === 'auto') {
+    // 1. 先将 'auto' 替换为当前的实际像素高度
+    content.style.height = `${content.scrollHeight}px`;
+    
+    // 2. 强制浏览器重绘/回流 或 延迟到下一帧
+    requestAnimationFrame(() => {
+      // 3. 现在将高度设置为最终的收起目标值，这将触发动画
+      content.style.height = `${targetHeightValue}px`;
+    });
+  } else {
+    // 对于其他情况（展开，或从固定高度收起），直接设置目标高度
+    content.style.height = `${targetHeightValue}px`;
+  }
 
   const onTransitionEnd = () => {
     content.removeEventListener('transitionend', onTransitionEnd);
     isAnimating.value = false;
-    // After animation, if expanded and content is not meant to scroll (fits fully or less than max rows)
-    // set height to auto to accommodate potential minor content changes without new scrollbars.
     if (targetExpandedState && !hasMoreRowsInternal.value && props.cate2List.length > 0) {
         const originalTransition = content.style.transition;
-        content.style.transition = 'none'; // Temporarily remove transition
-        content.style.height = 'auto';      // Allow natural height
-        requestAnimationFrame(() => {      // Ensure 'auto' has taken effect
-            content.style.transition = originalTransition; // Restore transition
+        content.style.transition = 'none';
+        content.style.height = 'auto';
+        requestAnimationFrame(() => {
+            content.style.transition = originalTransition;
         });
     } else if (!targetExpandedState && props.cate2List.length === 0) {
         content.style.height = `${GRID_INTERNAL_PADDING_BOTTOM + CONTENT_PADDING_BOTTOM}px`;
@@ -157,11 +169,11 @@ const animateHeightChange = (targetExpandedState: boolean) => {
     emit('height-changed');
   };
   content.addEventListener('transitionend', onTransitionEnd);
-  setTimeout(() => { // Fallback for transitionend not firing
+  setTimeout(() => { 
     if (isAnimating.value) {
       onTransitionEnd();
     }
-  }, 450); // Slightly longer than transition duration
+  }, 450); 
 };
 
 const handleToggleInternalExpand = () => {
@@ -187,7 +199,7 @@ const selectCate2 = (cate2: DouyinCategory2) => {
   flex: 1;
   position: relative;
   overflow: visible; 
-  background: var(--component-bg-deep-dark, #0A0A0A); /* Deeper black background for C2 area */
+  background: #18181b; /* Changed to #18181b as per request */
 }
 
 .cate2-content-dy {
@@ -292,9 +304,7 @@ const selectCate2 = (cate2: DouyinCategory2) => {
   color: var(--secondary-text, rgba(255, 255, 255, 0.5)); 
   transition: color 0.2s ease;
   font-size: 12px; 
-  /* Background of expand button should be distinct or blend with container if border is the separator */
-  /* If container is #0A0A0A, button could be same or slightly different like #18181b from Douyu */
-  background: var(--component-bg-deep-dark, #0A0A0A); /* Match container or use a specific button bg */
+  background: #18181b; /* Douyu Night Mode: #18181b */
   z-index: 10;
   border-top: 1px solid var(--border-color-on-dark, rgba(255, 255, 255, 0.1)); /* Border color for dark bg */
   height: 28px; 

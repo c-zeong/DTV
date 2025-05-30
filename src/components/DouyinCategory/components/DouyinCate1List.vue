@@ -37,7 +37,7 @@ const selectCate1 = (cate1: DouyinCategory1) => {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  background: var(--component-bg); /* Douyu: #1f1f23, use theme variable */
+  background: #1f1f23; /* Douyu Night Mode: #1f1f23 */
   flex-shrink: 0;
   /* border-bottom: 1px solid var(--border-color); */ /* Removed border */
 }
@@ -58,12 +58,12 @@ const selectCate1 = (cate1: DouyinCategory1) => {
   font-size: 13px;
   border-radius: 20px;
   white-space: nowrap;
-  background: var(--component-secondary-bg, rgba(255, 255, 255, 0.05));
-  color: var(--primary-text);
+  background: rgba(255, 255, 255, 0.1); /* Douyu Night Mode Unselected: rgba(255, 255, 255, 0.1) */
+  color: var(--primary-text); /* Keep themed text color, or set to #fff if needed */
 }
 
 .cate1-item:hover {
-  background: var(--card-hover-bg, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.2); /* Douyu Night Mode Hover: rgba(255, 255, 255, 0.2) */
 }
 
 .cate1-item.selected {

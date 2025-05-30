@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { FollowedStreamer, LiveStreamInfo } from '../common/types';
+import type { FollowedStreamer, LiveStreamInfo, LiveStatus } from '../common/types';
 
 export async function refreshDouyinFollowedStreamer(
   streamer: FollowedStreamer
@@ -13,8 +13,12 @@ export async function refreshDouyinFollowedStreamer(
 
     // Check if data is valid and there are no errors from the backend
     if (data && !data.error_message) {
+      const isLive = data.status === 2; // Correctly determines if live
+      const liveStatus: LiveStatus = isLive ? 'LIVE' : 'OFFLINE'; // Set liveStatus based on isLive
+
       return {
-        isLive: data.status === 2, // Douyin: status 2 means live
+        isLive: isLive, 
+        liveStatus: liveStatus, // Add/Update liveStatus field
         nickname: data.anchor_name || streamer.nickname, // Map anchor_name to nickname
         roomTitle: data.title || streamer.roomTitle,      // Map title to roomTitle
         avatarUrl: data.avatar || streamer.avatarUrl,    // Map avatar to avatarUrl
@@ -34,13 +38,13 @@ export async function refreshDouyinFollowedStreamer(
           data
         );
       }
-      return {}; // Return empty object if data is invalid or error occurred
+      return { isLive: false, liveStatus: 'OFFLINE' }; // Ensure these are set on error too
     }
   } catch (e) {
     console.error(
       `[DouyinFollowHelper] Failed to refresh Douyin streamer ${streamer.id}:`,
       e
     );
-    return {}; // Return empty object on error
+    return { isLive: false, liveStatus: 'OFFLINE' }; // Ensure these are set on error too
   }
 } 

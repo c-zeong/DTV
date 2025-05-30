@@ -85,62 +85,45 @@ const refreshHeightNonAnimated = () => {
 };
 
 const updateActualGridScrollHeight = () => {
-  nextTick(() => { // Ensure DOM is updated for cate2List changes or initial render
+  nextTick(() => {
     if (cate2GridRef.value) {
       actualGridScrollHeight.value = cate2GridRef.value.scrollHeight;
     } else {
-      actualGridScrollHeight.value = GRID_INTERNAL_PADDING_BOTTOM; // Default to padding if no grid (e.g. empty list)
+      actualGridScrollHeight.value = GRID_INTERNAL_PADDING_BOTTOM;
     }
-    // After scrollHeight is updated, refresh the container height based on the current state.
     refreshHeightNonAnimated();
   });
 };
 
 watch(() => props.cate2List, () => {
   updateActualGridScrollHeight();
-}, { deep: true }); // No 'immediate' needed as onMounted handles initial state.
+}, { deep: true });
 
 onMounted(() => {
-  // Initial call to set up scroll height and then the container height.
   updateActualGridScrollHeight();
 });
 
 const requiredHeightForAllGridItemsWithPadding = computed(() => {
-  // scrollHeight of grid already includes its own padding (GRID_INTERNAL_PADDING_BOTTOM)
-  // If list is empty, actualGridScrollHeight might be just GRID_INTERNAL_PADDING_BOTTOM.
-  // Add CONTENT_PADDING_BOTTOM for the .cate2-content's own padding.
   return actualGridScrollHeight.value + CONTENT_PADDING_BOTTOM;
 });
 
 const shouldShowExpandButtonComputed = computed(() => {
-  // Show button if the natural height needed for all items is greater than what 2 rows can accommodate
   return requiredHeightForAllGridItemsWithPadding.value > TARGET_CONTENT_HEIGHT_FOR_TWO_ROWS;
 });
 
 const getCurrentTargetHeight = (expandedState: boolean) => {
   const naturalContentHeight = requiredHeightForAllGridItemsWithPadding.value;
-
   if (expandedState) {
     if (props.hasMoreRows) {
       return TARGET_CONTENT_HEIGHT_FOR_EXPANDED_MAX_ROWS;
     }
     // If not hasMoreRows (content is <= EXPANDED_ROWS), show all of it.
     // Ensure naturalContentHeight is at least a minimal value if list becomes empty while expanded.
-    return props.cate2List.length > 0 ? naturalContentHeight : CONTENT_PADDING_BOTTOM;
+    return props.cate2List.length > 0 ? naturalContentHeight : GRID_INTERNAL_PADDING_BOTTOM + CONTENT_PADDING_BOTTOM;
   } else {
     // Collapsing
     // If naturalContentHeight (all items + padding) fits in one row's allowance or less.
-    // This also handles the case where cate2List is empty, as naturalContentHeight
-    // would then primarily consist of padding heights.
     if (naturalContentHeight <= TARGET_CONTENT_HEIGHT_FOR_ONE_ROW) {
-      // If the list is actually empty, naturalContentHeight will be based on paddings.
-      // We want minimal height for an empty list.
-      // CONTENT_PADDING_BOTTOM is the padding of cate2-content itself.
-      // If the grid is empty, its scrollHeight is its own padding_bottom.
-      // So naturalContentHeight = GRID_INTERNAL_PADDING_BOTTOM + CONTENT_PADDING_BOTTOM.
-      // This seems okay for an empty list if some padding is desired.
-      // To make it truly zero for empty list (if .cate2-content has no other visible borders/styles):
-      // if (props.cate2List.length === 0) return 0;
       return naturalContentHeight;
     }
     // Otherwise, if content needs more than one row, collapse to two rows.
@@ -149,13 +132,7 @@ const getCurrentTargetHeight = (expandedState: boolean) => {
 };
 
 watch(() => props.isExpanded, (newValue, _oldValue) => {
-  // This watch handles external changes to isExpanded (e.g. from parent calling toggleExpose)
-  // handleToggleExpand handles user clicks on the button
-  if (isAnimating.value) {
-    // If an animation is already in progress, and the state is just re-affirmed, do nothing.
-    // This can happen if parent logic changes isExpanded while an animation is ongoing.
-    // However, if it's a genuine toggle during animation, it might need more complex handling (cancel current, start new).
-    // For now, simply returning if animating is a common approach to avoid conflicting animations.
+  if (isAnimating.value && newValue === props.isExpanded) {
     return;
   }
   animateHeightChange(newValue);
@@ -167,50 +144,35 @@ const animateHeightChange = (targetExpandedState: boolean) => {
   const content = cate2ContentRef.value;
   const targetHeightValue = getCurrentTargetHeight(targetExpandedState);
 
-  // Temporarily set overflow to hidden during animation, regardless of target state
-  content.style.overflowY = 'hidden';
-
-  content.style.height = `${targetHeightValue}px`;
-  // classList.add('animating') is not strictly needed if transition is always on height
+  // Handle collapsing from 'auto' height (if it was set)
+  if (!targetExpandedState && content.style.height === 'auto') {
+    content.style.height = `${content.scrollHeight}px`;
+    requestAnimationFrame(() => {
+      content.style.height = `${targetHeightValue}px`;
+    });
+  } else {
+    content.style.height = `${targetHeightValue}px`;
+  }
 
   const onTransitionEnd = () => {
     content.removeEventListener('transitionend', onTransitionEnd);
     isAnimating.value = false;
-
-    if (targetExpandedState) {
-      if (props.hasMoreRows) {
-        // CSS now handles scrollable: .cate2-content.is-expanded.scrollable .cate2-scroll-wrapper
-        // .cate2-content remains overflow:hidden, scroll wrapper handles overflow:auto.
-      } else {
-        // If expanded fully and not scrolling (hasMoreRows is false), allow natural height.
-        // This is important if the number of items is less than EXPANDED_CONTENT_MAX_ROWS.
-        // Re-calculate natural height here in case list changed during animation.
-        if (props.cate2List.length > 0) {
-          // Temporarily remove transition to get immediate height for 'auto'
-          const originalTransition = content.style.transition;
-          content.style.transition = 'none';
-          content.style.height = 'auto';
-          // Force reflow/recalc if necessary, though 'auto' usually does it.
-          // const autoHeight = content.scrollHeight; // get actual height
-          // content.style.height = `${autoHeight}px`; // set it back, though 'auto' should be fine
-          // Restore transition for future animations
-          requestAnimationFrame(() => { // ensure 'auto' has taken effect
+    if (targetExpandedState && !props.hasMoreRows && props.cate2List.length > 0) {
+        const originalTransition = content.style.transition;
+        content.style.transition = 'none';
+        content.style.height = 'auto';
+        requestAnimationFrame(() => {
             content.style.transition = originalTransition;
-          });
-        } else {
-          content.style.height = `${CONTENT_PADDING_BOTTOM}px`; // Minimal height if empty
-        }
-      }
-    } else {
-      // Collapsed: height is already set to target (1 or 2 rows, or natural if less).
-      // Overflow should be hidden (as per CSS for non-expanded).
+        });
+    } else if (!targetExpandedState && props.cate2List.length === 0) {
+        // Use the same minimal height as in Douyin for consistency when empty and collapsed
+        content.style.height = `${GRID_INTERNAL_PADDING_BOTTOM + CONTENT_PADDING_BOTTOM}px`;
     }
     emit('height-changed');
   };
   content.addEventListener('transitionend', onTransitionEnd);
   setTimeout(() => {
     if (isAnimating.value) {
-      console.warn('Cate2Grid transitionend timeout fallback triggered.');
       onTransitionEnd();
     }
   }, 450);
