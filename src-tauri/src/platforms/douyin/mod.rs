@@ -8,7 +8,6 @@ pub mod utils;
 // pub mod parsers; // This line was causing an error, remove it if parsers.rs doesn't exist here
 
 // Re-export based on the actual file structure and main.rs imports
-pub use self::danmu::signature::generate_douyin_ms_token;
 pub use self::danmu::web_fetcher::fetch_douyin_room_info;
 pub use self::douyin_danmu_listener::start_douyin_danmu_listener;
 pub use self::douyin_streamer_detail::get_douyin_live_stream_url;

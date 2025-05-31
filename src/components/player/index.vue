@@ -160,7 +160,7 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
   isLoadingStream.value = true;
   streamError.value = null; // Clear previous general errors
   isOfflineError.value = false; // Clear previous offline state
-  
+
   if (!isRefresh) {
     danmakuMessages.value = [];
   }
@@ -300,14 +300,14 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
                         if (flvPlayerInstance.value) {
                             try {
                                 flvPlayerInstance.value.destroy();
-                                console.log('[Player] Destroyed previous mpegts.js player instance within customType.flv.');
+                                console.log(`[Player ${platformForLog}] Destroyed previous mpegts.js player instance within customType.flv.`);
                             } catch (e) {
-                                console.error('[Player] Error destroying previous mpegts.js player in customType.flv:', e);
+                                console.error(`[Player ${platformForLog}] Error destroying previous mpegts.js player in customType.flv:`, e);
                             }
                             flvPlayerInstance.value = null;
                         }
 
-                        console.log(`[Player ${platformForLog}] mpegts.js is supported. Initializing FLV player for URL:`, url);
+                        console.log(`[Player ${platformForLog}] mpegts.js is supported. Initializing FLV player for URL: ${url}`);
                         const flvPlayer = mpegts.default.createPlayer(
                             { type: 'flv', url: url, isLive: true, cors: true, hasAudio: true, hasVideo: true }, 
                             {}
@@ -336,9 +336,19 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
 
     art.value.on('ready', async () => {
       console.log('[Player] Artplayer instance ready.');
+      console.log('[Player] art.value inside ON_READY:', art.value);
+      if (art.value && art.value.plugins) {
+        console.log('[Player] art.value.plugins inside ON_READY:', art.value.plugins);
+        console.log('[Player] art.value.plugins.artplayerPluginDanmuku inside ON_READY:', art.value.plugins.artplayerPluginDanmuku);
+      } else {
+        console.log('[Player] art.value or art.value.plugins is NULL/UNDEFINED inside ON_READY.');
+      }
+
       if (pRoomId && pPlatform && art.value) { 
-        console.log(`[Player] Artplayer ready, starting danmaku for ${pPlatform}/${pRoomId}.`);
-        await startCurrentDanmakuListener(pPlatform, pRoomId);
+        console.log(`[Player] Artplayer ready, conditions met. Attempting to start danmaku for ${pPlatform}/${pRoomId}.`);
+        await startCurrentDanmakuListener(pPlatform, pRoomId, art.value);
+      } else {
+        console.log(`[Player] Artplayer ready, but conditions NOT met to start danmaku. pRoomId: ${pRoomId}, pPlatform: ${pPlatform}, art.value: ${!!art.value}`);
       }
     });
     art.value.on('error', (error: any, _reconnectTime: number) => { 
@@ -392,68 +402,117 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
   }
 }
 
-async function startCurrentDanmakuListener(platformToStart: Platform, roomIdToStart: string) {
-  if (!art.value || !art.value.plugins.artplayerPluginDanmuku) {
-      console.warn('[Player] StartDanmaku: Artplayer or Danmaku plugin not ready.');
-      return;
+async function startCurrentDanmakuListener(platform: Platform, roomId: string, artInstance: Artplayer | null) {
+  if (!roomId) {
+    console.log('[Player] Danmaku listener start skipped: No room ID.');
+    return;
+  }
+  if (!artInstance) {
+    console.error('[Player] Danmaku listener start skipped: artInstance is null or undefined.');
+    return;
   }
   if (isDanmakuListenerActive.value) {
-      console.log('[Player] StartDanmaku: Listener already active.');
-      return;
+    console.log('[Player] Danmaku listener start skipped: Listener already active.');
+    return;
   }
-  console.log(`[Player] Starting danmaku for: ${platformToStart}/${roomIdToStart}`);
-  try {
-    if (unlistenDanmakuFn) {
-        console.log('[Player] Cleaning up residual unlistenDanmakuFn before starting new one.');
-        unlistenDanmakuFn();
-        unlistenDanmakuFn = null;
-    }
-    danmakuMessages.value = [];
 
-    if (platformToStart === Platform.DOUYU) {
-      unlistenDanmakuFn = await startDouyuDanmakuListener(roomIdToStart, art.value, danmakuMessages);
-    } else if (platformToStart === Platform.DOUYIN) {
-      unlistenDanmakuFn = await startDouyinDanmakuListener(roomIdToStart, art.value, danmakuMessages);
-    } else {
-      console.warn(`[Player] Danmaku not supported for platform: ${platformToStart}`);
-      return;
+  console.log(`[Player] Attempting to start danmaku listener for ${platform}/${roomId}...`);
+  console.log('[Player] artInstance in startCurrentDanmakuListener:', artInstance);
+  if (artInstance.plugins) {
+    console.log('[Player] artInstance.plugins in startCurrentDanmakuListener:', artInstance.plugins);
+    console.log('[Player] artInstance.plugins.artplayerPluginDanmuku in startCurrentDanmakuListener:', artInstance.plugins.artplayerPluginDanmuku);
+  } else {
+    console.log('[Player] artInstance.plugins is NULL/UNDEFINED in startCurrentDanmakuListener.');
+  }
+
+  isDanmakuListenerActive.value = true;
+
+  try {
+    let stopFn: (() => void) | null = null;
+    if (platform === Platform.DOUYU) {
+      // Pass artInstance to the platform-specific helper
+      stopFn = await startDouyuDanmakuListener(roomId, artInstance, danmakuMessages); 
+    } else if (platform === Platform.DOUYIN) {
+      // Pass artInstance to the platform-specific helper
+      stopFn = await startDouyinDanmakuListener(roomId, artInstance, danmakuMessages);
     }
-    isDanmakuListenerActive.value = true;
-    console.log(`[Player] Danmaku listener started successfully for ${platformToStart}/${roomIdToStart}.`);
-  } catch (e: any) {
-    console.error(`[Player] Error starting danmaku for ${platformToStart}/${roomIdToStart}:`, e);
-    danmakuMessages.value.push({ nickname: '系统消息', content: `弹幕连接失败: ${e.message}`, level: '0', color: '#FF6347' });
-    isDanmakuListenerActive.value = false;
+    // TODO: Add other platforms here if they have danmaku
+
+    if (stopFn) {
+      unlistenDanmakuFn = stopFn;
+      console.log(`[Player] Danmaku listener started successfully for ${platform}/${roomId}.`);
+
+      // Add a system message for connection success
+      const successMessage: DanmakuMessage = {
+        id: `system-conn-${Date.now()}`,
+        nickname: '系统消息',
+        content: '弹幕连接成功！',
+        isSystem: true,
+        type: 'success',
+        color: '#28a745' // Optional: define color directly or let CSS handle via .system-message.success
+      };
+      danmakuMessages.value.push(successMessage);
+
+    } else {
+      console.warn(`[Player] Danmaku listener for ${platform}/${roomId} did not return a stop function.`);
+      isDanmakuListenerActive.value = false; 
+    }
+  } catch (error) {
+    console.error(`[Player] Failed to start danmaku listener for ${platform}/${roomId}:`, error);
+    isDanmakuListenerActive.value = false; 
+
+    // Optionally, push an error system message to danmakuMessages here too
+    const errorMessage: DanmakuMessage = {
+      id: `system-err-${Date.now()}`,
+      nickname: '系统消息',
+      content: '弹幕连接失败，请尝试刷新播放器。',
+      isSystem: true,
+      type: 'error', // You would need to define styles for .system-message.error in DanmuList.vue
+      color: '#dc3545' // Example error color
+    };
+    danmakuMessages.value.push(errorMessage);
   }
 }
 
-async function stopCurrentDanmakuListener(platformToStop: Platform, roomIdToStop: string | null) {
-  if (!isDanmakuListenerActive.value && !unlistenDanmakuFn) {
-    console.log('[Player] StopDanmaku: No active listener or unlisten function to stop.');
-    return;
-  }
-  console.log(`[Player] Attempting to stop danmaku for: ${platformToStop}/${roomIdToStop}`);
-  
-  const currentUnlisten = unlistenDanmakuFn;
-  unlistenDanmakuFn = null;
-  isDanmakuListenerActive.value = false;
+async function stopCurrentDanmakuListener(platform?: Platform, roomId?: string) {
+  console.log(`[Player] stopCurrentDanmakuListener CALLED. Platform: ${platform}, RoomID: ${roomId}, unlistenDanmakuFn exists: ${!!unlistenDanmakuFn}`);
 
-  try {
-    if (platformToStop === Platform.DOUYU && roomIdToStop) {
-      await stopDouyuDanmaku(roomIdToStop, currentUnlisten);
-    } else if (platformToStop === Platform.DOUYIN) {
-      await stopDouyinDanmaku(currentUnlisten);
-    } else {
-      console.warn(`[Player] No specific danmaku stop logic for platform: ${platformToStop} or room ID missing/invalid (${roomIdToStop}).`);
-      if (currentUnlisten) {
-          console.log('[Player] Calling generic unlisten function as a fallback.');
-          currentUnlisten();
-      }
+  if (platform) { // Check if platform is provided
+    console.log(`[Player] stopCurrentDanmakuListener: Calling platform-specific stop for ${platform}`);
+    if (platform === Platform.DOUYU) {
+      // Douyu needs roomId and the unlisten function
+      // Ensure roomId is not null/undefined if platform is Douyu, though type system should help.
+      await stopDouyuDanmaku(roomId!, unlistenDanmakuFn); 
+    } else if (platform === Platform.DOUYIN) {
+      // Douyin only needs the unlisten function
+      await stopDouyinDanmaku(unlistenDanmakuFn);
     }
-    console.log(`[Player] Danmaku stop process potentially completed for ${platformToStop}/${roomIdToStop}.`);
-  } catch (e: any) {
-    console.error(`[Player] Error stopping danmaku for ${platformToStop}/${roomIdToStop}:`, e);
+    // After platform-specific stop, it's assumed unlistenDanmakuFn (if used by the platform's stop function) is handled.
+    // We should nullify the global ref to prevent reuse and ensure it's clean for the next listener.
+    if (unlistenDanmakuFn) { 
+        console.log(`[Player] Nullifying unlistenDanmakuFn after platform-specific stop for ${platform}.`);
+        unlistenDanmakuFn = null;
+    }
+
+  } else if (unlistenDanmakuFn) {
+    // Fallback: if no platform specified but an unlisten function exists, it implies a generic cleanup.
+    // This path might be taken if stopCurrentDanmakuListener is called without platform context
+    // AFTER a listener was active.
+    console.warn('[Player] stopCurrentDanmakuListener called without platform, but a global unlistenDanmakuFn exists. Calling it now.');
+    try {
+      unlistenDanmakuFn();
+      unlistenDanmakuFn = null; // Nullify after successful call
+    } catch (e) {
+      console.error('[Player] Error executing fallback unlistenDanmakuFn:', e);
+      // Still nullify to prevent repeated errors with a bad function ref
+      unlistenDanmakuFn = null; 
+    }
+  } else {
+    console.log('[Player] stopCurrentDanmakuListener: No platform specified and no global unlistenDanmakuFn to act upon. Listener might have already been stopped or was never started.');
   }
+
+  isDanmakuListenerActive.value = false;
+  console.log('[Player] Danmaku listener stopped (isDanmakuListenerActive set to false).');
 }
 
 const retryInitialization = () => {

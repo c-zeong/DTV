@@ -57,6 +57,7 @@ pub struct AvatarData {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)] // Allow dead code for fields used by serde
 pub struct StreamUrlContainer {
     #[serde(rename = "flv_pull_url")]
     pub flv_pull_url: Option<HashMap<String, String>>, // e.g., {"FULL_HD1": "url1", "HD1": "url2"}
@@ -103,9 +104,10 @@ pub struct StreamQualityDetail {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)] // Allow dead code for fields used by serde
 pub struct StreamLinks {
     pub flv: Option<String>,
-    pub hls: Option<String>,
+    pub hls: Option<String>, // Added HLS field based on typical structure
     // pub cdn_multi_arc: Option<Value>,
     // pub sdk_params: Option<String>,
 }

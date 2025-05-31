@@ -664,17 +664,4 @@
   .list-content::-webkit-scrollbar-thumb:hover {
     background: var(--secondary-text, rgba(255, 255, 255, 0.2));
   }
-  
-  .streamer-item.status-live {
-    /* Styles for live streamers, e.g., border, background subtle hint */
-    /* border-left: 3px solid #4CAF50; */
-  }
-  .streamer-item.status-replay {
-    /* Styles for replay streamers */
-    /* border-left: 3px solid #ffc107; */
-  }
-  .streamer-item.status-offline {
-    /* Styles for offline streamers */
-    /* opacity: 0.8; */
-  }
   </style>

@@ -1,4 +1,4 @@
-use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue, USER_AGENT, ACCEPT, ACCEPT_LANGUAGE};
+use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue, USER_AGENT };
 use reqwest::{Client, Response, RequestBuilder, cookie::Jar};
 use std::time::Duration;
 use std::sync::Arc;
@@ -41,15 +41,6 @@ impl HttpClient {
         })?;
         self.headers.insert(name.clone(), header_value);
         Ok(())
-    }
-    
-    // Clears all headers except for the default ones (like User-Agent if set in new())
-    pub fn clear_headers(&mut self) {
-        let mut new_headers = ReqwestHeaderMap::new();
-        if let Some(ua) = self.headers.get(USER_AGENT) {
-            new_headers.insert(USER_AGENT, ua.clone());
-        }
-        self.headers = new_headers;
     }
 
     async fn send_request(&self, request_builder: RequestBuilder) -> Result<Response, String> {
@@ -94,13 +85,4 @@ impl HttpClient {
     }
 
     // Add post, post_json etc. from the demo if needed in the future
-}
-
-// Optional: if you still want a quick way to get headers for simple HTML page fetches (outside the client instance)
-// This is less used if the HttpClient instance manages its own headers for specific tasks.
-pub fn default_html_page_headers() -> ReqwestHeaderMap {
-    let mut headers = ReqwestHeaderMap::new();
-    headers.insert(ACCEPT, HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"));
-    headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.5"));
-    headers
 }

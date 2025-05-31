@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 // Wrapper for payload like { args: { room_id_str: "..." } }
 // Used by get_douyin_live_stream_url and start_douyin_danmaku_listener
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct PayloadWrapperForRoomId {
     pub args: RoomIdDetail,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct RoomIdDetail {
     #[serde(alias = "roomIdStr")]
     pub room_id_str: String,
@@ -15,11 +17,13 @@ pub struct RoomIdDetail {
 
 // New payload wrapper specifically for get_douyin_live_stream_url
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct GetStreamUrlArgs {
     pub room_id_str: String,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct GetStreamUrlPayload {
     pub args: GetStreamUrlArgs,
 }
@@ -37,6 +41,7 @@ pub struct LiveStreamInfo {
 }
 
 #[derive(Default, Clone)]
+#[allow(dead_code)]
 pub struct StreamUrlStore {
     pub url: std::sync::Arc<std::sync::Mutex<String>>,
 }
@@ -44,8 +49,10 @@ pub struct StreamUrlStore {
 // Moved from main.rs
 // State for the Douyin Danmaku listener
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct DouyinDanmakuState(pub std::sync::Mutex<Option<tokio::sync::mpsc::Sender<()>>>);
 
 // State for the Douyu Danmaku listener
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct DouyuDanmakuState(pub std::sync::Mutex<Option<tokio::sync::mpsc::Sender<()>>>); 

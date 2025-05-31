@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
 use reqwest;
 use std::collections::HashMap;
 use tokio::sync::oneshot;

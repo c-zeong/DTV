@@ -13,7 +13,6 @@ use crate::proxy::{start_proxy, ProxyServerHandle};
 use crate::StreamUrlStore;
 
 const DOUYIN_API_REFERER: &str = "https://live.douyin.com/";
-const PREFERRED_QUALITIES: [&str; 4] = ["FULL_HD1", "HD1", "SD1", "SD2"]; // As in demo
 
 // Struct to handle flexible argument deserialization - REMOVED as we use PayloadWrapperForRoomId from common
 // #[derive(Deserialize, Debug)]

@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use crate::platforms::common::http_client::DEFAULT_USER_AGENT;
-// use crate::platforms::douyin::signature; // Removed: ms_token is passed as a parameter, not generated here.
-use reqwest::header::{HeaderMap, HeaderValue, COOKIE, SET_COOKIE}; // Ensure SET_COOKIE is imported
+use reqwest::header::{HeaderMap, HeaderValue, COOKIE}; // Removed SET_COOKIE
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DouyinRoomCover {
@@ -77,48 +75,6 @@ pub struct DouyinLiveListResponse {
     pub rooms: Vec<LiveRoomFrontend>,
     pub has_more: bool,
     pub next_offset: i32, // The offset to use for the next request
-}
-
-// Helper function to fetch ttwid (simplified from web_fetcher)
-async fn fetch_ttwid_internal(client: &reqwest::Client) -> Result<String, String> {
-    let live_url = "https://live.douyin.com/";
-    match client.get(live_url).header("User-Agent", DEFAULT_USER_AGENT).send().await {
-        Ok(response) => {
-            if response.status().is_success() {
-                println!("Headers received from {}:", live_url);
-                let mut ttwid_val: Option<String> = None;
-                
-                // Iterate over Set-Cookie headers
-                for header_value in response.headers().get_all(SET_COOKIE) {
-                    if let Ok(cookie_str) = header_value.to_str() {
-                        // Simple parsing for "ttwid=value;" pattern
-                        // For robust parsing, consider using a cookie parsing crate
-                        if let Some(name_value_pair) = cookie_str.split(';').next() {
-                            let parts: Vec<&str> = name_value_pair.splitn(2, '=').collect();
-                            if parts.len() == 2 {
-                                let name = parts[0].trim();
-                                let value = parts[1].trim();
-                                println!("  Found cookie: Name: {}, Value: {}", name, value);
-                                if name == "ttwid" {
-                                    ttwid_val = Some(value.to_string());
-                                    // break; // Found ttwid, can stop iterating if it's the only one needed
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some(ttwid) = ttwid_val {
-                    Ok(ttwid)
-                } else {
-                    Err("ttwid not found in Set-Cookie headers from live.douyin.com".to_string())
-                }
-            } else {
-                Err(format!("Failed to fetch from live.douyin.com for ttwid, status: {}", response.status()))
-            }
-        }
-        Err(e) => Err(format!("Network error fetching ttwid: {}", e)),
-    }
 }
 
 #[tauri::command]

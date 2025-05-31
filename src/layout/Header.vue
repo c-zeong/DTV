@@ -156,7 +156,7 @@ const performDouyinIdSearch = async (userInputRoomId: string) => {
     isLoadingSearch.value = false;
     if (douyinInfo) {
       if (douyinInfo.error_message) {
-        searchError.value = douyinInfo.error_message;
+        searchError.value = '没有搜索到主播。';
       } else if (douyinInfo.anchor_name) {
         const isLive = douyinInfo.status === 2;
         searchResults.value = [{
@@ -169,14 +169,14 @@ const performDouyinIdSearch = async (userInputRoomId: string) => {
           rawStatus: douyinInfo.status,
         }];
       } else {
-        searchError.value = '没有找到该抖音主播或房间信息不完整。';
+        searchError.value = '没有搜索到主播。';
       }
     } else {
-      searchError.value = '未能获取抖音房间信息。';
+      searchError.value = '没有搜索到主播。';
     }
   } catch (e: any) {
     isLoadingSearch.value = false;
-    searchError.value = typeof e === 'string' ? e : '搜索抖音主播失败，请检查网络或ID。';
+    searchError.value = '没有搜索到主播。';
   }
   showResults.value = true;
 };
@@ -207,16 +207,16 @@ const performDouyuSearch = async (keyword: string) => {
           };
         });
       if (searchResults.value.length === 0) {
-        searchError.value = '没有找到相关斗鱼主播。';
+        searchError.value = '没有搜索到主播。';
       } else {
         searchError.value = null;
       }
     } else {
-      searchError.value = '搜索斗鱼主播失败或无结果。';
+      searchError.value = '没有搜索到主播。';
     }
   } catch (e) {
     isLoadingSearch.value = false;
-    searchError.value = '搜索斗鱼主播时发生错误。';
+    searchError.value = '没有搜索到主播。';
   }
   showResults.value = true;
 };
@@ -402,8 +402,8 @@ onMounted(() => {
   background-color: var(--scrollbar-thumb-hover-color, var(--primary-text, #8c909c));
 }
 
-.search-results-list {
-}
+/* .search-results-list {
+} */
 
 .search-loading,
 .search-error-message,

@@ -89,6 +89,14 @@ export async function startDouyuDanmakuListener(
   danmakuMessagesRef: Ref<DanmakuMessage[]> // For updating DanmuList
 ): Promise<() => void> {
   console.log('[DouyuPlayerHelper] Invoking start_danmaku_listener for room:', roomId);
+  console.log('[DouyuPlayerHelper] Received artInstance:', artInstance); // Log artInstance
+  if (artInstance && artInstance.plugins) {
+    console.log('[DouyuPlayerHelper] artInstance.plugins:', artInstance.plugins); // Log plugins object
+    console.log('[DouyuPlayerHelper] artInstance.plugins.artplayerPluginDanmuku:', artInstance.plugins.artplayerPluginDanmuku); // Log danmuku plugin
+  } else {
+    console.log('[DouyuPlayerHelper] artInstance or artInstance.plugins is NULL/UNDEFINED.');
+  }
+
   await invoke('start_danmaku_listener', { roomId });
   
   const eventName = `danmaku-${roomId}`;
@@ -97,7 +105,28 @@ export async function startDouyuDanmakuListener(
   const unlisten = await listen<DouyuRustDanmakuPayload>(eventName, (event: TauriEvent<DouyuRustDanmakuPayload>) => {
     console.log(`[DouyuPlayerHelper] Event received on ${eventName}:`, JSON.stringify(event.payload)); // Log received event payload
 
-    if (artInstance && artInstance.plugins.artplayerPluginDanmuku && event.payload) {
+    // Add detailed logging here, inside the callback
+    console.log('[DouyuPlayerHelper] INSIDE CALLBACK - Checking artInstance state:');
+    if (!artInstance) {
+      console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance is NULL or UNDEFINED.');
+    } else {
+      console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance exists.');
+      if (!artInstance.plugins) {
+        console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins is NULL or UNDEFINED.');
+      } else {
+        console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins exists:', artInstance.plugins);
+        if (artInstance.plugins.artplayerPluginDanmuku === undefined) {
+          console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku is UNDEFINED.');
+        } else if (artInstance.plugins.artplayerPluginDanmuku === null) {
+          console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku is NULL.');
+        } else {
+          console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku exists:', artInstance.plugins.artplayerPluginDanmuku);
+        }
+      }
+    }
+    console.log('[DouyuPlayerHelper] INSIDE CALLBACK - event.payload exists?:', !!event.payload);
+
+    if (artInstance && artInstance.plugins && artInstance.plugins.artplayerPluginDanmuku && event.payload) {
       // const douyuP = event.payload; // Old raw payload
       // let frontendDanmaku: DanmakuMessage | null = null; // Old logic
 
@@ -138,7 +167,7 @@ export async function startDouyuDanmakuListener(
       }
       // If commonDanmaku is null (e.g., 'uenter' type), it's implicitly skipped here.
     } else {
-      console.log('[DouyuPlayerHelper] Danmaku received, but Artplayer or plugin not ready or no payload.');
+      console.log('[DouyuPlayerHelper] Danmaku received, but Artplayer instance, its plugins, the danmuku plugin, or event payload was not valid/ready. Check preceding logs for details.'); // Enhanced log message
     }
   });
   

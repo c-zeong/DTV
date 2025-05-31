@@ -8,13 +8,16 @@
         </div>
       </div>
       <div class="danmu-messages-area" ref="danmakuListEl" @scroll="handleScroll">
-        <div v-if="!messages || messages.length === 0" class="empty-danmu-placeholder">
-          <p>暂无弹幕</p>
+        <!-- Empty/Loading Placeholder -->
+        <div v-if="(!messages || messages.length === 0)" class="empty-danmu-placeholder">
           <p v-if="!props.roomId">请先选择一个直播间</p>
-          <p v-else>连接中或弹幕稀疏...</p>
+          <p v-else>暂无弹幕或连接中...</p> <!-- Simplified placeholder -->
         </div>
-        <div v-for="(danmaku, index) in messages" :key="index" class="danmu-item">
-          <div class="danmu-meta-line">
+
+        <div v-for="(danmaku) in messages" :key="danmaku.id || danmaku.content + danmaku.nickname" 
+             :class="['danmu-item', { 'system-message': danmaku.isSystem, 'success': danmaku.isSystem && danmaku.type === 'success' }]"
+        >
+          <div class="danmu-meta-line" v-if="!danmaku.isSystem">
             <span v-if="danmaku.badgeName" class="danmu-badge">
               <span class="badge-name">{{ danmaku.badgeName }}</span>
               <span v-if="danmaku.badgeLevel" class="badge-level">{{ danmaku.badgeLevel }}</span>
@@ -25,7 +28,10 @@
             </span>
           </div>
           <div class="danmu-content-line">
-            <span class="danmu-content">{{ danmaku.content }}</span>
+            <span class="danmu-content">
+              <svg v-if="danmaku.isSystem && danmaku.type === 'success'" class="inline-icon success-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+              {{ danmaku.isSystem ? danmaku.nickname + ': ' : '' }}{{ danmaku.content }}
+            </span>
           </div>
         </div>
       </div>
@@ -41,22 +47,21 @@
   
   // Assuming DanmakuMessage from player/index.vue is the structure of messages passed in props
   // If not, this interface needs to match the actual structure provided by player/index.vue
-  interface DanmakuUIMessage { // Renamed to avoid conflict if CommonDanmakuMessage is very different
-    id?: string; // If your messages have unique IDs, use them for :key for better performance
+  interface DanmakuUIMessage {
+    id?: string;
     nickname: string;
     content: string;
-    level?: string; // Made optional to match player/index.vue's DanmakuMessage
+    level?: string;
     badgeName?: string;
     badgeLevel?: string;
     color?: string;
-    // Ensure all fields used in the template are here
-    // sender?: { nickname: string; level?: string; badgeName?: string; badgeLevel?: string }; // if sender is an object
+    isSystem?: boolean; // Flag for system messages
+    type?: 'success' | 'error' | 'info'; // Type of system message for styling
   }
   
   const props = defineProps<{
     roomId: string | null;
-    messages: DanmakuUIMessage[]; // Use PropType for complex types if needed, or direct type here
-                                  // Make sure DanmakuUIMessage matches what player/index.vue provides in danmakuMessages
+    messages: DanmakuUIMessage[];
   }>();
   
   const danmakuListEl = ref<HTMLElement | null>(null);
@@ -82,14 +87,22 @@
   const handleScroll = () => {
     if (!danmakuListEl.value) return;
     const el = danmakuListEl.value;
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 50;
-    console.log('[DanmuList] handleScroll - scrollHeight:', el.scrollHeight, 'scrollTop:', el.scrollTop, 'clientHeight:', el.clientHeight, 'isNearBottom:', isNearBottom);
-    if (!isNearBottom) {
-      userScrolled.value = true;
-      console.log('[DanmuList] handleScroll - userScrolled set to true');
+    // Check if the user has scrolled to a point where the bottom of the visible area
+    // is more than, say, 20 pixels away from the actual bottom of the content.
+    const isScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 20; 
+
+    if (isScrolledUp) {
+      // If user has scrolled up significantly, set userScrolled to true
+      if (!userScrolled.value) {
+        userScrolled.value = true;
+        console.log('[DanmuList] User scrolled up, auto-scroll disabled.');
+      }
     } else {
-      userScrolled.value = false;
-      console.log('[DanmuList] handleScroll - userScrolled set to false');
+      // If user is at or very near the bottom, re-enable auto-scroll by setting userScrolled to false
+      if (userScrolled.value) {
+        userScrolled.value = false;
+        console.log('[DanmuList] User scrolled to bottom, auto-scroll re-enabled.');
+      }
     }
   };
   
@@ -110,7 +123,7 @@
   watch(autoScroll, (newValue) => {
     console.log('[DanmuList] autoScroll changed to:', newValue);
     if (newValue) {
-      userScrolled.value = false; // When autoScroll is turned on, reset userScrolled
+      userScrolled.value = false; 
       console.log('[DanmuList] autoScroll watcher - userScrolled reset to false');
       scrollToBottom();
     }
@@ -119,16 +132,14 @@
   watch(() => props.messages, (newMessages, oldMessages) => {
     const oldLength = oldMessages ? oldMessages.length : 0;
     const newLength = newMessages ? newMessages.length : 0;
-    console.log(`[DanmuList] props.messages watcher - oldLength: ${oldLength}, newLength: ${newLength}`);
-    
-    const effectivelyNewMessages = newMessages && (newLength > oldLength);
-    console.log('[DanmuList] props.messages watcher - effectivelyNewMessages:', effectivelyNewMessages);
+    console.log(`[DanmuList] props.messages watcher triggered. New messages count: ${newLength}, Old messages count: ${oldLength}.`);
+    console.log('[DanmuList] New messages content (first 5):', newMessages?.slice(0, 5).map(m => m.content));
 
-    if (effectivelyNewMessages) {
-      console.log('[DanmuList] props.messages watcher - New messages detected. autoScroll:', autoScroll.value, 'userScrolled:', userScrolled.value);
-      if (autoScroll.value && !userScrolled.value) {
-        scrollToBottom();
-      }
+    if (newMessages && autoScroll.value && !userScrolled.value) {
+      console.log('[DanmuList] props.messages watcher - Conditions met. Attempting to scroll.');
+      scrollToBottom();
+    } else {
+      console.log('[DanmuList] props.messages watcher - Conditions for scroll NOT met. newMessages:', !!newMessages, 'autoScroll:', autoScroll.value, 'userScrolled:', userScrolled.value);
     }
   }, { deep: true });
 
@@ -198,11 +209,9 @@
     bottom: 0;
     left: 0;
     right: 0;
-    overflow-y: auto;
-    padding: 8px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    overflow-y: auto; /* Ensure vertical scrolling is enabled */
+    padding: 8px 12px; /* Add some padding */
+    scroll-behavior: smooth; /* Optional: for smoother programmatic scrolling */
   }
   
   .empty-danmu-placeholder {
@@ -261,9 +270,9 @@
     flex-shrink: 0;
   }
   
-  .badge-name {
+  /* .badge-name { */
     /* Style for badge name if needed */
-  }
+  /* } */
   
   .badge-level {
     margin-left: 4px;
@@ -319,6 +328,67 @@
   .danmu-messages-area {
     scrollbar-width: thin;
     scrollbar-color: var(--border-color-light, #5a5a5e) var(--tertiary-bg, #3a3a3c);
+  }
+  
+  .connection-status-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+  }
+  
+  .connection-status-placeholder.success {
+    color: #28a745; /* Green for success */
+  }
+  
+  .connection-status-placeholder .status-icon {
+    width: 32px; /* Increased icon size */
+    height: 32px;
+    margin-bottom: 8px;
+  }
+  
+  .connection-status-placeholder p {
+    margin: 4px 0;
+    font-size: 0.9rem; /* Adjusted font size */
+    font-weight: 500; /* Slightly bolder */
+  }
+  
+  .danmu-item.system-message {
+    background-color: rgba(40, 167, 69, 0.1);
+    border-left: 3px solid #28a745;
+    /* padding: 6px 10px; Inherits .danmu-item padding, can override if needed */
+    margin-top: 4px; /* Add some space if it's the very first item */
+    margin-bottom: 8px;
+  }
+
+  .danmu-item.system-message .danmu-content {
+    /* color: #218838; */ /* System message content color can be default or specific if needed */
+    font-weight: normal; /* System messages might not need to be bold */
+    /* display: flex; */ /* Re-evaluate if icon is part of content span */
+    /* align-items: center; */
+  }
+
+  .danmu-item.system-message.success .danmu-content {
+    color: #218838; /* Specific color for success system messages */
+    font-weight: 500;
+  }
+
+  .inline-icon {
+    width: 1.1em; /* Slightly larger than text */
+    height: 1.1em;
+    margin-right: 8px;
+    vertical-align: -0.15em; /* Adjust vertical alignment */
+  }
+  
+  .success-icon {
+    fill: #28a745;
   }
   
   </style>

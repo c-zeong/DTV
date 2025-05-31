@@ -1,4 +1,4 @@
-use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue, USER_AGENT, ACCEPT, ACCEPT_LANGUAGE};
+use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue, USER_AGENT};
 use reqwest::{Client, Response, RequestBuilder, cookie::Jar};
 use std::time::Duration;
 use std::sync::Arc;

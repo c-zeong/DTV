@@ -1,4 +1,4 @@
-use super::gen::{ChatMessage, MemberMessage, LikeMessage, RoomStatsMessage, User}; // Updated to directly use types from gen
+use super::gen::{ChatMessage, MemberMessage, LikeMessage, RoomStatsMessage }; // Updated to directly use types from gen
 use prost::Message as ProstMessage; // For .decode()
 use serde::Serialize; // For an AppHandle.emit_all payload
 use specta; // Keep the main crate import if needed, or just specta::Type

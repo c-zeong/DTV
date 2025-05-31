@@ -104,6 +104,7 @@
     text-overflow: ellipsis;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2; /* Standard property */
     -webkit-box-orient: vertical;
     letter-spacing: 0.2px;
     text-align: left; /* Ensure room title is left-aligned */
