@@ -7,7 +7,7 @@ export async function refreshDouyinFollowedStreamer(
   try {
     // The payload for 'get_douyin_live_stream_url' expects { payload: { args: { room_id_str: string } } }
     const payloadData = { args: { room_id_str: streamer.id } };
-    const data = await invoke<LiveStreamInfo>('get_douyin_live_stream_url', {
+    const data = await invoke<LiveStreamInfo>('fetch_douyin_streamer_info', {
       payload: payloadData,
     });
 

@@ -39,7 +39,7 @@ defineOptions({
 import CategoryList from '../components/DouyuCategory/index.vue';
 import LiveList from '../components/DouyuStreamerList/index.vue'; 
 import { invoke } from '@tauri-apps/api/core'
-import type { CategorySelectedEvent } from '../components/DouyuCategoryList/types';
+import type { CategorySelectedEvent } from '../components/DouyuCategory/types';
 
 // Types for the data structure returned by the Rust command `fetch_categories`
 interface FrontendCate3Item {

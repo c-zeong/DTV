@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Platform } from '../common/types';
 import type { StreamerDetails } from '../common/types';
 
 // This interface should match the Rust struct LiveStreamInfo returned by get_douyin_live_stream_url

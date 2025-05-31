@@ -303,7 +303,6 @@
   import type { StreamerDetails } from '../../platforms/common/types'
   import { fetchDouyuStreamerDetails } from '../../platforms/douyu/streamerInfoParser'
   import { getDouyinStreamerDetails } from '../../platforms/douyin/streamerInfoParser'
-  import { useFollowStore } from '../../store/followStore'
   
   const emit = defineEmits<{
     (e: 'follow', data: { id: string; platform: Platform; nickname: string; avatarUrl: string | null; roomTitle?: string }): void
@@ -342,7 +341,6 @@
     // Default fallback
     return false;
   })
-  const computedCategoryName = computed(() => roomDetails.value?.categoryName ?? 'N/A')
   
   const isFollowing = computed(() => props.isFollowed)
   
@@ -502,5 +500,10 @@
       updateHighlightVars();
     });
   })
+
+  // const roomUrl = computed(() => {
+  //   if (!props.streamer || !props.streamer.id) return '#';
+  //   return getStreamerRoomUrl(props.streamer.platform, props.streamer.id);
+  // });
 
   </script>

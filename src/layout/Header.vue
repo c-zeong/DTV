@@ -78,8 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
-import type { LiveAnchorItem } from '../types/streamer';
+import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { Platform } from '../platforms/common/types';
 
@@ -151,7 +150,7 @@ const performDouyinIdSearch = async (userInputRoomId: string) => {
   isLoadingSearch.value = true;
   try {
     const payloadData = { args: { room_id_str: userInputRoomId } };
-    const douyinInfo = await invoke<DouyinApiStreamInfo>('get_douyin_live_stream_url', {
+    const douyinInfo = await invoke<DouyinApiStreamInfo>('fetch_douyin_streamer_info', {
       payload: payloadData,
     });
     isLoadingSearch.value = false;

@@ -2,11 +2,15 @@ use crate::platforms::common::http_client::HttpClient;
 use crate::platforms::douyin::models::*;
 use crate::platforms::douyin::utils::setup_douyin_cookies;
 use reqwest::header::REFERER; // For setting referer for the API call
-use tauri::command;
+use tauri::{command, AppHandle, State}; // Added AppHandle and State
 use reqwest; // 确保 reqwest 被导入
 // use serde::Deserialize; // Removed unused import
 // use crate::platforms::common::GetStreamUrlPayload; // Will use full path
 // use crate::platforms::common::LiveStreamInfo; // Will use full path
+
+// Import proxy and store
+use crate::proxy::{start_proxy, ProxyServerHandle};
+use crate::StreamUrlStore;
 
 const DOUYIN_API_REFERER: &str = "https://live.douyin.com/";
 const PREFERRED_QUALITIES: [&str; 4] = ["FULL_HD1", "HD1", "SD1", "SD2"]; // As in demo
@@ -20,7 +24,12 @@ const PREFERRED_QUALITIES: [&str; 4] = ["FULL_HD1", "HD1", "SD1", "SD2"]; // As 
 // }
 
 #[command]
-pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetStreamUrlPayload) -> Result<crate::platforms::common::LiveStreamInfo, String> { 
+pub async fn get_douyin_live_stream_url(
+    app_handle: AppHandle,
+    stream_url_store: State<'_, StreamUrlStore>,
+    proxy_server_handle: State<'_, ProxyServerHandle>,
+    payload: crate::platforms::common::GetStreamUrlPayload
+) -> Result<crate::platforms::common::LiveStreamInfo, String> { 
     let room_id_str = payload.args.room_id_str; 
     println!("[Douyin Live RS] Received room_id_str via GetStreamUrlPayload: '{}'", room_id_str);
 
@@ -242,6 +251,47 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
         }
     }
 
+    let mut proxied_stream_url: Option<String> = None;
+
+    if let Some(real_url) = &final_stream_url {
+        if !real_url.is_empty() {
+            println!("[Douyin Live RS] Real stream URL found: {}. Attempting to use proxy.", real_url);
+            // Set the real URL to the store
+            { // Explicit scope for MutexGuard
+                let mut current_url_in_store = stream_url_store.url.lock().unwrap();
+                *current_url_in_store = real_url.clone();
+                println!("[Douyin Live RS] Set stream URL in store: {}", current_url_in_store);
+            }
+
+            // Start the proxy
+            // Note: start_proxy takes ownership/references of states, so we pass them directly.
+            // We need to clone app_handle if it's used elsewhere after this, but here it's fine.
+            match start_proxy(app_handle, proxy_server_handle, stream_url_store).await {
+                Ok(p_url) => {
+                    println!("[Douyin Live RS] Proxy started successfully. Proxy URL: {}", p_url);
+                    proxied_stream_url = Some(p_url);
+                }
+                Err(e) => {
+                    eprintln!("[Douyin Live RS] Failed to start proxy: {}", e);
+                    // Fallback: return an error message or try to return the original URL if proxy is not critical
+                    // For now, we'll just mean stream_url remains None in the response.
+                    // Consider how to signal this error to the frontend.
+                    // Setting error_message in LiveStreamInfo might be an option.
+                }
+            }
+        } else {
+            println!("[Douyin Live RS] Real stream URL is empty. Not attempting proxy.");
+        }
+    } else {
+        println!("[Douyin Live RS] No real stream URL found. Not attempting proxy.");
+    }
+
+    let final_error_message = if proxied_stream_url.is_none() && final_stream_url.is_some() {
+        Some("代理启动失败".to_string())
+    } else {
+        None
+    };
+
     Ok(crate::platforms::common::LiveStreamInfo {
         title: room_data_entry.title.clone(),
         anchor_name: main_data.user.as_ref().and_then(|u| u.nickname.clone()),
@@ -249,8 +299,8 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
             .and_then(|u| u.avatar_thumb.as_ref())
             .and_then(|at| at.url_list.as_ref())
             .and_then(|ul| ul.first().cloned()),
-        stream_url: final_stream_url,
+        stream_url: proxied_stream_url, // proxied_stream_url is moved here
         status: Some(current_status),
-        error_message: None,
+        error_message: final_error_message, // Use the pre-calculated message
     })
 }

@@ -35,12 +35,7 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, watch, nextTick, type PropType } from 'vue';
-  // import { invoke } from '@tauri-apps/api/core'; // No longer directly used for start_danmaku_listener
-  import { listen } from '@tauri-apps/api/event';
-  import { startDanmakuListener, getCurrentPlatform } from '../../platforms/common/apiService';
-  import { CommonDanmakuMessage } from '../../platforms/common/types'; // Import common type
-  import { parseDouyuDanmakuMessage } from '../../platforms/douyu/parsers'; // Import Douyu parser
+  import { ref, watch, nextTick } from 'vue';
   // TODO: Import other platform parsers as needed
   // import { parseBilibiliDanmakuMessage } from '../../platforms/bilibili/parsers';
   

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { Category2, Category3, CategorySelectedEvent } from '../types'
+import type { Category2, Category3 } from '../types'
 
 export function useSelection(emit: (event: 'category-selected', ...args: any[]) => void) {
   const selectedCate1Id = ref<number | null>(null)

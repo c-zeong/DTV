@@ -1,6 +1,6 @@
 <template>
   <div class="player-view">
-    <MainPlayer v-if="roomId" :room-id="roomId" :is-followed="isFollowed" @follow="handleFollow" @unfollow="handleUnfollow" @close-player="handleClosePlayer" />
+    <MainPlayer v-if="roomId" :platform="Platform.DOUYU" :room-id="roomId" :is-followed="isFollowed" @follow="handleFollow" @unfollow="handleUnfollow" @close-player="handleClosePlayer" />
     <div v-else>
       <p>无效的房间ID。</p>
     </div>
@@ -8,8 +8,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import MainPlayer from '../components/player/index.vue'; // Assuming MainPlayer is in components/player
 import { useFollowStore } from '../store/followStore'; // Placeholder for follow state
 import type { FollowedStreamer } from '../platforms/common/types'; // Keep as type-only import

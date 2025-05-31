@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import type { Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { DouyinStreamer, DouyinPartitionRoomsResponse } from '../types';

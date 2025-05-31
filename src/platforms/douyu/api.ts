@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { DouyuRoomInfo, DouyuRawCategoriesResponseData, DouyuRawApiResponse } from './types';
+import type { DouyuRoomInfo, DouyuRawCategoriesResponseData } from './types';
 // import type { StreamerDetails } from '../common/types'; // No longer needed here
 
 /**

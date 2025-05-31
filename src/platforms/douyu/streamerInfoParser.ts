@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Platform } from '../common/types';
 import type { StreamerDetails, LiveStatus } from '../common/types'; // Import LiveStatus
 
 // This interface should match the DouyuFollowInfo struct returned by Rust

@@ -83,7 +83,6 @@
   
   <script setup lang="ts">
   import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
-  import { invoke } from '@tauri-apps/api/core';
   import type { FollowedStreamer, LiveStatus } from '../../platforms/common/types';
   import { Platform } from '../../platforms/common/types';
   // import type { DouyuRoomInfo } from '../../platforms/douyu/types'; // No longer needed here

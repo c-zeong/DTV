@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import MainPlayer from '../components/player/index.vue';
 import { useFollowStore } from '../store/followStore';
 import type { FollowedStreamer } from '../platforms/common/types';

@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'; // Added import for invoke
 import * as douyuApi from '../douyu/api';
 import * as douyuParsers from '../douyu/parsers'; // Import Douyu parsers
-import type { DouyuRoomInfo } from '../douyu/types'; // This might not be needed here anymore if parsing is fully encapsulated
 import { Platform } from './types'; // Import Platform enum
 import type { SupportedPlatform, StreamerDetails, StreamPlaybackDetails, CommonCategoryGroup, CommonPlatformCategory } from './types'; // Import SupportedPlatform, StreamerDetails, and StreamPlaybackDetails, and CommonCategoryGroup, and CommonPlatformCategory
 // Import other platform APIs and types here as they are added

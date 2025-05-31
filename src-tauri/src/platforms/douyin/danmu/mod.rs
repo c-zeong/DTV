@@ -16,3 +16,7 @@ pub mod gen;
 
 // Re-export key structs/functions if needed, or define the public API of the danmu module.
 // For now, we'll keep it simple and main.rs will qualify paths like danmu::websocket_connection::... 
+
+pub use self::message_handler::*;
+pub use self::signature::generate_douyin_ms_token;
+pub use self::web_fetcher::fetch_douyin_room_info; 

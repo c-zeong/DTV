@@ -27,62 +27,67 @@ export interface DouyinRustDanmakuPayload {
 
 // New asynchronous function to fetch Douyin stream details including URL and metadata
 export async function fetchAndPrepareDouyinStreamConfig(roomId: string): Promise<{ 
-  streamUrl: string | null; // Null if not live or error
+  streamUrl: string | null;
   streamType: string | undefined; 
   title?: string | null; 
   anchorName?: string | null; 
   avatar?: string | null; 
   isLive: boolean; 
-  initialError?: string | null; 
+  initialError: string | null; // Made non-optional, will always be string or null
 }> {
   console.log('[DouyinPlayerHelper] Fetching Douyin stream details for roomId:', roomId);
   if (!roomId) {
-    // This case should ideally be caught before calling, but as a safeguard:
     return { streamUrl: null, streamType: undefined, title: null, anchorName: null, avatar: null, isLive: false, initialError: '房间ID未提供' };
   }
 
   try {
     const payloadData = { args: { room_id_str: roomId } };
-    // Assuming LiveStreamInfo is the correct type returned by this invoke call
     const result = await invoke<LiveStreamInfo>('get_douyin_live_stream_url', { payload: payloadData });
 
     if (result.error_message) {
       console.error(`[DouyinPlayerHelper] Error from backend for room ${roomId}: ${result.error_message}`);
-      return { 
-        streamUrl: null, 
-        streamType: undefined, 
-        title: result.title, // Still return title/anchor/avatar if available
+      return {
+        streamUrl: null,
+        streamType: undefined,
+        title: result.title,
         anchorName: result.anchor_name,
         avatar: result.avatar,
-        isLive: result.status === 2, // Reflect reported status if available
-        initialError: result.error_message 
+        isLive: result.status === 2,
+        initialError: result.error_message, // string | null from Rust
       };
     }
 
-    const isActuallyLive = result.status === 2 && !!result.stream_url;
+    const streamAvailable = result.status === 2 && !!result.stream_url;
     let streamType: string | undefined = undefined;
+    let uiMessage: string | null = null; 
 
-    if (isActuallyLive && result.stream_url) {
-      // Determine stream type from URL
-      if (result.stream_url.includes('pull-hls') || result.stream_url.endsWith('.m3u8')) {
+    if (streamAvailable && result.stream_url) {
+      if (result.stream_url.startsWith('http://127.0.0.1') && result.stream_url.endsWith('/live.flv')) {
+        streamType = 'flv';
+      } else if (result.stream_url.includes('pull-hls') || result.stream_url.endsWith('.m3u8')) {
         streamType = 'hls';
-      } else if (result.stream_url.includes('pull-flv') || result.stream_url.includes('.flv')) { // .flv might not be in path for some direct FLV urls
+      } else if (result.stream_url.includes('pull-flv') || result.stream_url.includes('.flv')) {
         streamType = 'flv';
       } else {
-        // Fallback or default if type cannot be determined but URL exists
-        console.warn(`[DouyinPlayerHelper] Could not determine stream type for URL: ${result.stream_url}. Defaulting to undefined.`);
-        // streamType = 'flv'; // Or some other default if applicable
+        console.warn(`[DouyinPlayerHelper] Could not determine stream type for URL: ${result.stream_url}.`);
+      }
+      // uiMessage remains null if stream is available and no prior error.
+    } else {
+      if (result.status !== 2) {
+        uiMessage = result.title ? `主播 ${result.anchor_name || ''} 未开播。` : '主播未开播或房间不存在。';
+      } else {
+        uiMessage = '主播在线，但获取直播流失败。';
       }
     }
-    
+
     return {
-      streamUrl: isActuallyLive ? result.stream_url : null,
+      streamUrl: streamAvailable ? (result.stream_url !== undefined ? result.stream_url : null) : null,
       streamType: streamType,
       title: result.title,
       anchorName: result.anchor_name,
       avatar: result.avatar,
-      isLive: isActuallyLive, // More accurate liveness based on URL presence
-      initialError: !isActuallyLive && result.status !== 2 ? (result.title ? `主播 ${result.anchor_name || ''} 未开播。` : '主播未开播。') : null,
+      isLive: streamAvailable,
+      initialError: uiMessage, // uiMessage is definitely string or null here.
     };
 
   } catch (e: any) {
@@ -94,7 +99,7 @@ export async function fetchAndPrepareDouyinStreamConfig(roomId: string): Promise
         anchorName: null, 
         avatar: null, 
         isLive: false, 
-        initialError: `获取直播信息失败: ${e.message || '未知错误'}` 
+        initialError: e.message || '获取直播信息失败: 未知错误' // Ensure string here
     };
   }
 }

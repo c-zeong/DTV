@@ -101,8 +101,7 @@
 import { ref, onMounted, watch, onUnmounted, shallowRef, nextTick } from 'vue';
 import Artplayer from 'artplayer';
 import artplayerPluginDanmuku from 'artplayer-plugin-danmuku';
-import Hls from 'hls.js';
-// Platform and common types
+
 import { Platform } from '../../platforms/common/types';
 import type { DanmakuMessage } from './types'; // Moved to a shared types file
 
@@ -342,7 +341,7 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         await startCurrentDanmakuListener(pPlatform, pRoomId);
       }
     });
-    art.value.on('error', (error: any, reconnectTime: number) => { 
+    art.value.on('error', (error: any, _reconnectTime: number) => { 
         console.error('[Player] Artplayer error:', error);
         streamError.value = `播放器错误: ${error.message || error}`; 
     });
@@ -483,16 +482,16 @@ const retryInitialization = () => {
 };
 
 watch([() => props.roomId, () => props.platform, () => props.streamUrl, () => props.avatar, () => props.title, () => props.anchorName, () => props.isLive], 
-  async ([newRoomId, newPlatform, newStreamUrl, newAvatar, newTitle, newAnchorName, newIsLive], [oldRoomId, oldPlatform, oldStreamUrl, oldAvatar, oldTitle, oldAnchorName, oldIsLive]) => {
+  async ([newRoomId, newPlatform, newStreamUrl, _newAvatar, _newTitle, _newAnchorName, _newIsLive], [oldRoomId, oldPlatform, _oldStreamUrl, _oldAvatar, _oldTitle, _oldAnchorName, _oldIsLive]) => {
     // Update internal reactive streamer info when props change
     // For Douyin, these props might be initially undefined, and then MainPlayer fetches them.
     // For Douyu, props are the source of truth for this info.
     if (newPlatform === Platform.DOUYU) { // Only update from props if Douyu
-      playerTitle.value = newTitle;
-      playerAnchorName.value = newAnchorName;
-      playerAvatar.value = newAvatar;
-      if (newIsLive !== undefined) {
-          playerIsLive.value = newIsLive;
+      playerTitle.value = _newTitle;
+      playerAnchorName.value = _newAnchorName;
+      playerAvatar.value = _newAvatar;
+      if (_newIsLive !== undefined) {
+          playerIsLive.value = _newIsLive;
       }
     }
 
@@ -502,7 +501,7 @@ watch([() => props.roomId, () => props.platform, () => props.streamUrl, () => pr
       if (!(props.initialError && props.initialError.includes('主播未开播'))) {
         isOfflineError.value = false; 
       }
-      if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== oldStreamUrl)) {
+      if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== _oldStreamUrl)) {
          console.log(`[Player] Props changed. Re-initializing player for ${newPlatform} room ${newRoomId}.`);
         initializePlayerAndStream(newRoomId, newPlatform, newStreamUrl); // Douyin will ignore newStreamUrl now
       }
