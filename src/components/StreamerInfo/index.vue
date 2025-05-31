@@ -2,7 +2,7 @@
     <div class="streamer-info">
       <div class="streamer-layout">
         <div class="avatar-wrapper">
-          <img v-if="avatarUrl && !showAvatarText" :src="avatarUrl" :alt="computedNickname" @error="handleAvatarError" class="avatar-img">
+          <img v-if="props.avatar && !showAvatarText" :src="props.avatar" :alt="computedNickname" @error="handleAvatarError" class="avatar-img">
           <div v-else class="avatar-fallback">{{ computedNickname.charAt(0).toUpperCase() }}</div>
         </div>
   
@@ -303,6 +303,7 @@
   import type { StreamerDetails } from '../../platforms/common/types'
   import { fetchDouyuStreamerDetails } from '../../platforms/douyu/streamerInfoParser'
   import { getDouyinStreamerDetails } from '../../platforms/douyin/streamerInfoParser'
+  import { useFollowStore } from '../../store/followStore'
   
   const emit = defineEmits<{
     (e: 'follow', data: { id: string; platform: Platform; nickname: string; avatarUrl: string | null; roomTitle?: string }): void
@@ -317,6 +318,7 @@
     anchorName?: string | null
     avatar?: string | null
     isLive?: boolean | null
+    initialViewerCount?: number | null
   }>()
   
   const roomDetails = ref<StreamerDetails | null>(null)
@@ -423,9 +425,9 @@
   }
   
   const handleAvatarError = () => {
-    console.warn('[StreamerInfo] Failed to load avatar: ' + avatarUrl.value)
-    showAvatarText.value = true
-  }
+    console.warn(`[StreamerInfo] Avatar image failed to load for ${props.anchorName} (URL: ${props.avatar}). Displaying fallback.`);
+    showAvatarText.value = true;
+  };
   
   const idFollowContainerRef = ref<HTMLElement | null>(null);
   const streamerIdRef = ref<HTMLElement | null>(null);
@@ -484,6 +486,16 @@
       updateHighlightVars();
     });
   }, { deep: true })
+
+  watch(() => props.avatar, (newAvatar, oldAvatar) => {
+    if (newAvatar !== oldAvatar) {
+      showAvatarText.value = false; // Reset error state if avatar URL changes
+    }
+    // Ensure that if a valid avatar URL comes through, the fallback is hidden.
+    if (newAvatar && showAvatarText.value) {
+      showAvatarText.value = false;
+    }
+  });
 
   onUpdated(() => {
     nextTick(() => {

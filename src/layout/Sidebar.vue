@@ -117,16 +117,16 @@ defineExpose({ router });
   display: flex;
   flex-direction: column;
   padding: 0 12px;
-  margin-bottom: 16px;
-  gap: 8px;
-  margin-top: 20px;
+  margin-bottom: 8px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-radius: 10px;
   color: var(--secondary-text);
   text-decoration: none;

@@ -4,6 +4,7 @@ import Artplayer from 'artplayer';
 import { Ref } from 'vue';
 import { Platform } from '../common/types';
 import type { DanmakuMessage, RustGetStreamUrlPayload } from '../../components/player/types';
+import type { LiveStreamInfo } from '../common/types';
 
 // Specific type for Douyin's raw danmaku payload from Rust event
 // This was named RustDanmakuPayload in player/index.vue
@@ -15,39 +16,87 @@ export interface DouyinRustDanmakuPayload {
   fans_club_level: number; // from Rust's i32
 }
 
-export function getDouyinStreamConfig(directUrl: string | null | undefined): { streamUrl: string, streamType: string } {
-  console.log('[DouyinPlayerHelper] getDouyinStreamConfig called with directUrl:', directUrl);
-  if (!directUrl) {
-    console.error('[DouyinPlayerHelper] Error: directUrl is null or undefined.');
-    throw new Error('抖音直播流地址未提供。');
-  }
-  
-  let streamType: string = 'flv'; // Default to FLV
-  console.log('[DouyinPlayerHelper] Initial streamType set to:', streamType);
+// Old synchronous function, to be replaced or removed
+// export function getDouyinStreamConfig(streamUrlProp: string | undefined | null): { streamUrl: string, streamType: string | undefined } {
+//   if (!streamUrlProp) {
+//     throw new Error('抖音直播流 URL 未提供。');
+//   }
+//   const streamType = streamUrlProp.includes('.m3u8') ? 'hls' : (streamUrlProp.includes('.flv') ? 'flv' : undefined);
+//   return { streamUrl: streamUrlProp, streamType };
+// }
 
-  // Check if the hostname contains 'pull-hls' or if path ends with .m3u8
+// New asynchronous function to fetch Douyin stream details including URL and metadata
+export async function fetchAndPrepareDouyinStreamConfig(roomId: string): Promise<{ 
+  streamUrl: string | null; // Null if not live or error
+  streamType: string | undefined; 
+  title?: string | null; 
+  anchorName?: string | null; 
+  avatar?: string | null; 
+  isLive: boolean; 
+  initialError?: string | null; 
+}> {
+  console.log('[DouyinPlayerHelper] Fetching Douyin stream details for roomId:', roomId);
+  if (!roomId) {
+    // This case should ideally be caught before calling, but as a safeguard:
+    return { streamUrl: null, streamType: undefined, title: null, anchorName: null, avatar: null, isLive: false, initialError: '房间ID未提供' };
+  }
+
   try {
-    const urlObj = new URL(directUrl);
-    const hostname = urlObj.hostname;
-    const pathname = urlObj.pathname;
-    console.log(`[DouyinPlayerHelper] Parsed URL: hostname='${hostname}', pathname='${pathname}'`);
+    const payloadData = { args: { room_id_str: roomId } };
+    // Assuming LiveStreamInfo is the correct type returned by this invoke call
+    const result = await invoke<LiveStreamInfo>('get_douyin_live_stream_url', { payload: payloadData });
 
-    if (hostname.includes('pull-hls') || pathname.toLowerCase().endsWith('.m3u8')) {
-      console.warn(`[DouyinPlayerHelper] Condition met for HLS: hostname includes 'pull-hls' (${hostname.includes('pull-hls')}) OR pathname ends with .m3u8 (${pathname.toLowerCase().endsWith('.m3u8')}). Setting streamType to 'hls'.`);
-      streamType = 'hls';
-    } else {
-      console.log(`[DouyinPlayerHelper] Condition for HLS not met. hostname='${hostname}', pathname='${pathname}'. Keeping streamType as 'flv'.`);
-      streamType = 'flv'; // Explicitly set for clarity, though it's the default
+    if (result.error_message) {
+      console.error(`[DouyinPlayerHelper] Error from backend for room ${roomId}: ${result.error_message}`);
+      return { 
+        streamUrl: null, 
+        streamType: undefined, 
+        title: result.title, // Still return title/anchor/avatar if available
+        anchorName: result.anchor_name,
+        avatar: result.avatar,
+        isLive: result.status === 2, // Reflect reported status if available
+        initialError: result.error_message 
+      };
     }
-  } catch (e) {
-    console.error('[DouyinPlayerHelper] Failed to parse URL or check hostname/pathname:', directUrl, e);
-    // Fallback to FLV if URL parsing or checks fail
-    streamType = 'flv';
-    console.log('[DouyinPlayerHelper] Error during URL parsing, falling back to streamType:', streamType);
+
+    const isActuallyLive = result.status === 2 && !!result.stream_url;
+    let streamType: string | undefined = undefined;
+
+    if (isActuallyLive && result.stream_url) {
+      // Determine stream type from URL
+      if (result.stream_url.includes('pull-hls') || result.stream_url.endsWith('.m3u8')) {
+        streamType = 'hls';
+      } else if (result.stream_url.includes('pull-flv') || result.stream_url.includes('.flv')) { // .flv might not be in path for some direct FLV urls
+        streamType = 'flv';
+      } else {
+        // Fallback or default if type cannot be determined but URL exists
+        console.warn(`[DouyinPlayerHelper] Could not determine stream type for URL: ${result.stream_url}. Defaulting to undefined.`);
+        // streamType = 'flv'; // Or some other default if applicable
+      }
+    }
+    
+    return {
+      streamUrl: isActuallyLive ? result.stream_url : null,
+      streamType: streamType,
+      title: result.title,
+      anchorName: result.anchor_name,
+      avatar: result.avatar,
+      isLive: isActuallyLive, // More accurate liveness based on URL presence
+      initialError: !isActuallyLive && result.status !== 2 ? (result.title ? `主播 ${result.anchor_name || ''} 未开播。` : '主播未开播。') : null,
+    };
+
+  } catch (e: any) {
+    console.error(`[DouyinPlayerHelper] Exception while fetching Douyin stream details for ${roomId}:`, e);
+    return { 
+        streamUrl: null, 
+        streamType: undefined, 
+        title: null, 
+        anchorName: null, 
+        avatar: null, 
+        isLive: false, 
+        initialError: `获取直播信息失败: ${e.message || '未知错误'}` 
+    };
   }
-  
-  console.log('[DouyinPlayerHelper] Final determined streamConfig:', { streamUrl: directUrl, streamType });
-  return { streamUrl: directUrl, streamType };
 }
 
 export async function startDouyinDanmakuListener(

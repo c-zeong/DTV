@@ -30,10 +30,10 @@
             v-if="props.roomId && props.platform"
             :room-id="props.roomId"
             :platform="props.platform"
-            :title="props.title"
-            :anchor-name="props.anchorName"
-            :avatar="props.avatar"
-            :is-live="false" 
+            :title="playerTitle"
+            :anchor-name="playerAnchorName"
+            :avatar="playerAvatar"
+            :is-live="false"
             :is-followed="props.isFollowed"
             @follow="$emit('follow', $event)"
             @unfollow="$emit('unfollow', $event)"
@@ -46,8 +46,9 @@
                 <line x1="1" y1="1" x2="23" y2="23" stroke-width="2"></line> 
               </svg>
             </div>
-            <h3>{{ streamError }}</h3>
+            <h3>😴 {{ streamError }}</h3>
             <p>主播当前未开播，请稍后再来。</p>
+            <button @click="retryInitialization" class="retry-btn">再试一次</button>
           </div>
         </div>
         <div v-else-if="streamError && !isOfflineError" class="error-player">
@@ -60,18 +61,18 @@
           </div>
           <h3>加载失败</h3>
           <p>{{ streamError }}</p>
-          <button @click="retryInitialization" class="retry-btn">重试</button>
+          <button @click="retryInitialization" class="retry-btn">再试一次</button>
         </div>
         <div v-else class="player-container">
           <StreamerInfo
             v-if="props.roomId"
             :room-id="props.roomId"
             :platform="props.platform"
-            :title="props.title"
-            :anchor-name="props.anchorName"
-            :avatar="props.avatar"
+            :title="playerTitle"
+            :anchor-name="playerAnchorName"
+            :avatar="playerAvatar"
             :is-followed="props.isFollowed"
-            :is-live="props.isLive"
+            :is-live="playerIsLive"
             @follow="$emit('follow', $event)"
             @unfollow="$emit('unfollow', $event)"
             class="streamer-info"
@@ -107,7 +108,7 @@ import type { DanmakuMessage } from './types'; // Moved to a shared types file
 
 // Platform-specific player helpers
 import { getDouyuStreamConfig, startDouyuDanmakuListener, stopDouyuDanmaku, stopDouyuProxy } from '../../platforms/douyu/playerHelper';
-import { getDouyinStreamConfig, startDouyinDanmakuListener, stopDouyinDanmaku } from '../../platforms/douyin/playerHelper';
+import { fetchAndPrepareDouyinStreamConfig, startDouyinDanmakuListener, stopDouyinDanmaku } from '../../platforms/douyin/playerHelper';
 
 import StreamerInfo from '../StreamerInfo/index.vue';
 import DanmuList from '../DanmuList/index.vue';
@@ -129,6 +130,7 @@ const emit = defineEmits<{
   (e: 'unfollow', roomId: string): void;
   (e: 'close-player'): void;
   (e: 'fullscreen-change', isFullscreen: boolean): void;
+  (e: 'request-refresh-details'): void;
 }>();
 
 const playerContainerRef = ref<HTMLDivElement | null>(null);
@@ -142,22 +144,39 @@ const isLoadingStream = ref(true);
 const streamError = ref<string | null>(null);
 const isOfflineError = ref(false); // Added to track '主播未开播' state
 
+// Reactive state for streamer info, initialized by props, potentially updated by internal fetches (for Douyin)
+const playerTitle = ref(props.title);
+const playerAnchorName = ref(props.anchorName);
+const playerAvatar = ref(props.avatar);
+const playerIsLive = ref(props.isLive);
+
 const isInNativeFullscreen = ref(false);
 const isInWebFullscreen = ref(false);
 const isFullScreen = ref(false); // True if either native or web fullscreen is active
 
-async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, pStreamUrlProp?: string | null) {
-  console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}, InitialError=${props.initialError}`);
+async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, pStreamUrlProp?: string | null, isRefresh: boolean = false) {
+  console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}, isRefresh=${isRefresh}, InitialErrorFromProps=${props.initialError}`);
+  
+  // Reset states at the beginning of every initialization attempt
   isLoadingStream.value = true;
-  streamError.value = null;
-  isOfflineError.value = false; 
-  danmakuMessages.value = [];
+  streamError.value = null; // Clear previous general errors
+  isOfflineError.value = false; // Clear previous offline state
+  
+  if (!isRefresh) {
+    danmakuMessages.value = [];
+  }
 
   // Handle initialError from props (e.g., Douyin pre-check says "主播未开播")
   if (props.initialError && props.initialError.includes('主播未开播')) {
-    console.log(`[Player] Handling initialError: ${props.initialError}`);
+    console.log(`[Player] Handling initialError from props: ${props.initialError}`);
     streamError.value = props.initialError;
     isOfflineError.value = true;
+    // Update reactive player info based on props if offline state is from props
+    playerTitle.value = props.title;
+    playerAnchorName.value = props.anchorName;
+    playerAvatar.value = props.avatar;
+    playerIsLive.value = false; // Explicitly set to false if error indicates offline
+
     isLoadingStream.value = false;
     return; // Skip further initialization if streamer is known to be offline
   }
@@ -186,9 +205,40 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
     let streamConfig: { streamUrl: string, streamType: string | undefined };
 
     if (pPlatform === Platform.DOUYU) {
+      // playerIsLive should be updated by the watcher from props.isLive from DouyuPlayerView
+      if (playerIsLive.value === false) { // Explicitly check for false, as null/undefined might mean info not yet loaded
+        console.log(`[Player] Douyu platform: Streamer is explicitly offline (playerIsLive.value is false). Skipping stream fetch.`);
+        streamError.value = streamError.value || '主播未开播。'; // Preserve specific error if already set by initialError prop
+        isOfflineError.value = true;
+        isLoadingStream.value = false;
+        return; // Stop further execution for stream fetching and player init
+      }
+      // If playerIsLive is true or undefined (meaning DouyuPlayerView might not have passed it, or we assume live by default if prop absent)
+      // then proceed to get stream config.
+      console.log('[Player] Douyu platform: Attempting to get stream config.');
       streamConfig = await getDouyuStreamConfig(pRoomId);
+      // After getting streamConfig, we might get an error or no URL, which will be handled by subsequent checks.
+      // If getDouyuStreamConfig itself determines offline and throws/returns error, it will be caught by the main try-catch.
+
     } else if (pPlatform === Platform.DOUYIN) {
-      streamConfig = getDouyinStreamConfig(pStreamUrlProp);
+      const douyinConfig = await fetchAndPrepareDouyinStreamConfig(pRoomId);
+      
+      // Update internal reactive state with fetched Douyin info
+      playerTitle.value = douyinConfig.title;
+      playerAnchorName.value = douyinConfig.anchorName;
+      playerAvatar.value = douyinConfig.avatar;
+      playerIsLive.value = douyinConfig.isLive;
+      
+      if (douyinConfig.initialError || !douyinConfig.isLive || !douyinConfig.streamUrl) {
+        streamError.value = douyinConfig.initialError || '主播未开播或无法获取直播流。';
+        isOfflineError.value = true; // Assume offline or error state
+        isLoadingStream.value = false;
+        // Ensure playerIsLive is false if there's an error making it unplayable
+        playerIsLive.value = false; 
+        console.warn(`[Player] Douyin config error or not live: ${streamError.value}`);
+        return; // Stop if not playable
+      }
+      streamConfig = { streamUrl: douyinConfig.streamUrl, streamType: douyinConfig.streamType };
     } else {
       throw new Error(`不支持的平台: ${pPlatform}`);
     }
@@ -202,10 +252,19 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
       return;
     }
 
-    const artPlayerOptions = {
+    // Determine final stream type, ensuring .m3u8 URLs are treated as HLS
+    let finalArtPlayerStreamType = streamConfig.streamType;
+    if (streamConfig.streamUrl && streamConfig.streamUrl.includes('.m3u8')) {
+      if (finalArtPlayerStreamType !== 'hls') {
+        console.log(`[Player] URL contains .m3u8. Overriding streamType from '${finalArtPlayerStreamType}' to 'hls'.`);
+        finalArtPlayerStreamType = 'hls';
+      }
+    }
+
+    const artPlayerOptions: any = {
         container: playerContainerRef.value, 
         url: streamConfig.streamUrl,
-        type: 'flv',
+        type: finalArtPlayerStreamType || 'flv', // Use the potentially overridden type, fallback to 'flv'
         isLive: true, pip: true, autoplay: true, autoSize: false, aspectRatio: false,
         fullscreen: true, fullscreenWeb: true, miniProgressBar: true, mutex: true,
         backdrop: false, playsInline: true, autoPlayback: true, theme: '#FB7299', lang: 'zh-cn',
@@ -216,7 +275,23 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
             mode: 0, margin: [10, '2%'], antiOverlap: true, synchronousPlayback: false, emitter:false
             }),
         ],
-        controls: [],
+        controls: [
+          {             
+            name: 'streamRefresh', 
+            position: 'left',     
+            index: 15, // Placed immediately after play/pause
+            html: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path></svg>',
+            tooltip: '刷新',
+            click: async () => {
+              console.log('[Player] Stream Refresh button clicked (from controls option).');
+              if (props.roomId && props.platform) {
+                await initializePlayerAndStream(props.roomId, props.platform, props.streamUrl, true);
+              } else {
+                console.warn('[Player] Refresh clicked but no roomId/platform available.');
+              }
+            }
+          }, // Volume control, far right
+        ],
         customType: {
             flv: function(video: HTMLVideoElement, url: string) {
                 const platformForLog = pPlatform; 
@@ -267,9 +342,9 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         await startCurrentDanmakuListener(pPlatform, pRoomId);
       }
     });
-    art.value.on('error', (err: any) => { 
-        console.error('[Player] Artplayer error:', err);
-        streamError.value = `播放器错误: ${err.message || err}`; 
+    art.value.on('error', (error: any, reconnectTime: number) => { 
+        console.error('[Player] Artplayer error:', error);
+        streamError.value = `播放器错误: ${error.message || error}`; 
     });
     art.value.on('fullscreen', (nativeActive: boolean) => {
       // console.log(`[Player] Native fullscreen event: ${nativeActive}`); // Optional
@@ -385,18 +460,51 @@ async function stopCurrentDanmakuListener(platformToStop: Platform, roomIdToStop
 const retryInitialization = () => {
   if (props.roomId && props.platform) {
     console.log('[Player] Retrying initialization...');
-    initializePlayerAndStream(props.roomId, props.platform, props.streamUrl);
+    
+    if (props.platform === Platform.DOUYU) {
+      console.log('[Player] Douyu platform: Emitting request-refresh-details to parent.');
+      // Set loading state immediately to give user feedback
+      isLoadingStream.value = true; 
+      streamError.value = null; // Clear previous errors
+      isOfflineError.value = false; // Clear offline state
+      emit('request-refresh-details');
+      // For Douyu, we now rely on the parent (DouyuPlayerView) to re-fetch details.
+      // When DouyuPlayerView updates the props (like `isLive`), 
+      // the watcher in MainPlayer (that listens to prop changes)
+      // will automatically call `initializePlayerAndStream`.
+    } else {
+      // For other platforms like Douyin, MainPlayer handles its own fetching 
+      // directly within initializePlayerAndStream.
+      initializePlayerAndStream(props.roomId, props.platform, props.streamUrl);
+    }
+  } else {
+    console.warn('[Player] Retry initialization called but no roomId or platform.');
   }
 };
 
-watch([() => props.roomId, () => props.platform, () => props.streamUrl], 
-  async ([newRoomId, newPlatform, newStreamUrl], [oldRoomId, oldPlatform, oldStreamUrl]) => {
+watch([() => props.roomId, () => props.platform, () => props.streamUrl, () => props.avatar, () => props.title, () => props.anchorName, () => props.isLive], 
+  async ([newRoomId, newPlatform, newStreamUrl, newAvatar, newTitle, newAnchorName, newIsLive], [oldRoomId, oldPlatform, oldStreamUrl, oldAvatar, oldTitle, oldAnchorName, oldIsLive]) => {
+    // Update internal reactive streamer info when props change
+    // For Douyin, these props might be initially undefined, and then MainPlayer fetches them.
+    // For Douyu, props are the source of truth for this info.
+    if (newPlatform === Platform.DOUYU) { // Only update from props if Douyu
+      playerTitle.value = newTitle;
+      playerAnchorName.value = newAnchorName;
+      playerAvatar.value = newAvatar;
+      if (newIsLive !== undefined) {
+          playerIsLive.value = newIsLive;
+      }
+    }
+
+    // Initial error from props (e.g., DouyuPlayerView determined offline before MainPlayer rendered)
     if (newRoomId && newPlatform) {
-      // Always reset isOfflineError when props change significantly
-      isOfflineError.value = false; 
+      // Always reset isOfflineError when props change significantly unless initialError prop dictates it
+      if (!(props.initialError && props.initialError.includes('主播未开播'))) {
+        isOfflineError.value = false; 
+      }
       if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== oldStreamUrl)) {
          console.log(`[Player] Props changed. Re-initializing player for ${newPlatform} room ${newRoomId}.`);
-        initializePlayerAndStream(newRoomId, newPlatform, newStreamUrl);
+        initializePlayerAndStream(newRoomId, newPlatform, newStreamUrl); // Douyin will ignore newStreamUrl now
       }
     } else if (!newRoomId && art.value) { 
       console.log('[Player] No newRoomId, stopping and clearing player.');
@@ -429,6 +537,24 @@ watch([() => props.roomId, () => props.platform, () => props.streamUrl],
       streamError.value = null;
       isOfflineError.value = false; // Clear offline error state
     }
+
+    // If props.roomId and props.platform are present at mount.
+    // No need to call it explicitly here again.
+    if (!props.roomId || !props.platform) {
+      console.log('[Player] Mounted without RoomID/Platform. Player will be empty.');
+      // If initialError is present from props even without roomId/platform (e.g. a general error page routing here)
+      // Ensure isLoading is false and error states are reflected.
+      if (props.initialError) {
+        if (props.initialError.includes('主播未开播')) {
+            streamError.value = props.initialError;
+            isOfflineError.value = true;
+        } else {
+            streamError.value = props.initialError;
+            isOfflineError.value = false; // Ensure it's not marked as offline for other errors
+        }
+      }
+      isLoadingStream.value = false;
+    }
 }, 
 { immediate: true }
 );
@@ -439,12 +565,17 @@ onMounted(async () => {
   // if props.roomId and props.platform are present at mount.
   // No need to call it explicitly here again.
   if (!props.roomId || !props.platform) {
-    console.log('[Player] Mounted without RoomID/Platform. Player will be empty or show initial error if provided.');
-    // If initialError is '主播未开播', the watcher might not run if roomId/platform are missing,
-    // but the template handles isOfflineError directly. Let's ensure isLoading is false.
-    if (props.initialError && props.initialError.includes('主播未开播')) {
-      streamError.value = props.initialError;
-      isOfflineError.value = true;
+    console.log('[Player] Mounted without RoomID/Platform. Player will be empty.');
+    // If initialError is present from props even without roomId/platform (e.g. a general error page routing here)
+    // Ensure isLoading is false and error states are reflected.
+    if (props.initialError) {
+      if (props.initialError.includes('主播未开播')) {
+          streamError.value = props.initialError;
+          isOfflineError.value = true;
+      } else {
+          streamError.value = props.initialError;
+          isOfflineError.value = false; // Ensure it's not marked as offline for other errors
+      }
     }
     isLoadingStream.value = false;
   }
@@ -736,19 +867,32 @@ onUnmounted(async () => {
   opacity: 0.8;
 }
 
-.error-player .retry-btn {
-  margin-top: 20px;
-  padding: 10px 20px;
-  background-color: #FB7299;
+.error-player .retry-btn, 
+.offline-player .retry-btn { /* Ensure .offline-player .retry-btn also uses these styles */
+  margin-top: 25px; /* Increased margin-top slightly */
+  padding: 12px 28px; 
+  background-color: #FB7299; 
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px; 
   cursor: pointer;
-  font-size: 1rem;
-  transition: background-color 0.2s ease;
+  font-size: 1.05em; 
+  font-weight: 500;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(251, 114, 153, 0.2);
 }
-.error-player .retry-btn:hover {
-  background-color: #e06387;
+
+.error-player .retry-btn:hover,
+.offline-player .retry-btn:hover {
+  background-color: #e06387; 
+  transform: translateY(-2px); 
+  box-shadow: 0 6px 16px rgba(251, 114, 153, 0.3);
+}
+
+.error-player .retry-btn:active,
+.offline-player .retry-btn:active {
+  transform: translateY(0px);
+  box-shadow: 0 3px 10px rgba(251, 114, 153, 0.15);
 }
 
 /* 视频元素样式 */

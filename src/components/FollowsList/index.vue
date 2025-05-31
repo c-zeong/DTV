@@ -331,19 +331,22 @@
   
   /* Header styles */
   .list-header {
-    padding: 12px 16px;
+    padding: 8px 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 8px;
     border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
     background: var(--header-bg, rgba(25, 26, 31, 0.8));
+    flex-shrink: 0;
   }
   
   .header-title {
-    margin: 0;
-    font-size: 14px;
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--primary-text, #ffffff);
+    margin: 0;
+    line-height: 1.2;
   }
   
   .header-actions {

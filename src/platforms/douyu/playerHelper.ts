@@ -24,7 +24,7 @@ export async function getDouyuStreamConfig(roomId: string): Promise<{ streamUrl:
   console.log('[DouyuPlayerHelper] Fetching Douyu stream details for roomId:', roomId);
   let finalStreamUrl: string | null = null;
   let streamType: string | undefined = undefined;
-  const MAX_STREAM_FETCH_ATTEMPTS = 3; // Consider making this configurable or a constant elsewhere
+  const MAX_STREAM_FETCH_ATTEMPTS = 1; // Changed to 1 attempt
 
   for (let attempt = 1; attempt <= MAX_STREAM_FETCH_ATTEMPTS; attempt++) {
     try {

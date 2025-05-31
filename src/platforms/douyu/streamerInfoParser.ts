@@ -45,7 +45,7 @@ export async function fetchDouyuStreamerDetails(roomId: string): Promise<Streame
       currentLiveStatus = 'OFFLINE';
     }
 
-    const isActuallyLive = currentLiveStatus === 'LIVE';
+    const isActuallyLive = currentLiveStatus === 'LIVE' || currentLiveStatus === 'REPLAY';
 
     // Note: The DouyuFollowInfo struct from Rust currently doesn't include viewerCount or categoryName.
     // If StreamerDetails needs these, fetch_douyu_room_info in Rust must be updated to extract and return them,

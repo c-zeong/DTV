@@ -21,7 +21,7 @@
         @fullscreen-change="handleFullscreenChange"
       >
         <transition name="fade" mode="out-in">
-          <keep-alive :include="['HomeView']">
+          <keep-alive :include="['HomeView', 'DouyinHomeView']">
             <component :is="Component" :key="route.path" />
           </keep-alive>
         </transition>

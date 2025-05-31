@@ -165,7 +165,7 @@ pub async fn get_douyin_live_stream_url(payload: crate::platforms::common::GetSt
     // It might need a redirect if it doesn't contain "pull-flv".
     if let Some(initial_flv_url_candidate) = final_stream_url.clone() { // 使用 clone 来获取 owned String
         if initial_flv_url_candidate.contains("pull-flv") {
-            println!("[Douyin Live RS INFO] 初始 FLV URL 来自 sdk_data，已包含 'pull-flv': {}. 将使用此链接.", initial_flv_url_candidate);
+            println!("[Douyin Live RS INFO] 初始 FLV URL 来自 sdk_data 已包含 'pull-flv': {}. 将使用此链接.", initial_flv_url_candidate);
             // final_stream_url 已经是 Some(initial_flv_url_candidate)，无需更改
         } else {
             println!("[Douyin Live RS INFO] 初始 FLV URL ('{}') 不含 'pull-flv'. 尝试解析重定向.", initial_flv_url_candidate);
