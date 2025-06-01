@@ -53,11 +53,13 @@ export async function fetchAndPrepareDouyinStreamConfig(roomId: string): Promise
       if (result.stream_url.startsWith('http://127.0.0.1') && result.stream_url.endsWith('/live.flv')) {
         streamType = 'flv';
       } else if (result.stream_url.includes('pull-hls') || result.stream_url.endsWith('.m3u8')) {
-        streamType = 'hls';
+        console.warn(`[DouyinPlayerHelper] Received HLS-like stream URL (${result.stream_url}), but expected flv. Overriding to flv.`);
+        streamType = 'flv';
       } else if (result.stream_url.includes('pull-flv') || result.stream_url.includes('.flv')) {
         streamType = 'flv';
       } else {
-        console.warn(`[DouyinPlayerHelper] Could not determine stream type for URL: ${result.stream_url}.`);
+        console.warn(`[DouyinPlayerHelper] Could not determine stream type for URL: ${result.stream_url}. Defaulting to flv.`);
+        streamType = 'flv';
       }
       // uiMessage remains null if stream is available and no prior error.
     } else {

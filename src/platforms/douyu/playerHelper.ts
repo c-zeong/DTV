@@ -30,7 +30,11 @@ export async function getDouyuStreamConfig(roomId: string): Promise<{ streamUrl:
       const playbackDetails = await fetchStreamPlaybackDetails(roomId, Platform.DOUYU);
       if (playbackDetails && playbackDetails.primaryUrl) {
         finalStreamUrl = playbackDetails.primaryUrl;
-        streamType = playbackDetails.format === 'm3u8' ? 'hls' : playbackDetails.format;
+        streamType = playbackDetails.format; // 直接使用后端返回的 format
+        if (streamType === 'm3u8') {
+            console.warn('[DouyuPlayerHelper] Received m3u8 format, but expected flv. Overriding to flv.');
+            streamType = 'flv';
+        }
         break; 
       } else {
         // This case might be redundant if fetchStreamPlaybackDetails throws an error for empty/null URLs

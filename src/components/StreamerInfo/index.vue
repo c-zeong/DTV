@@ -27,10 +27,10 @@
                   <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12.998h-6v6h-2v-6H5v-2h6v-6h2v6h6z"/></svg>
                 </span>
                 <span class="follow-icon icon-check" v-else>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="m9.55 18.001l-5.7-5.7l1.425-1.425L9.55 15.151l9.175-9.175l1.425 1.425z"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59L7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12L5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/></svg>
                 </span>
               </span>
-              <span class="follow-text">{{ isFollowing ? '已关' : '关注' }}</span>
+              <span class="follow-text">{{ isFollowing ? '取关' : '关注' }}</span>
             </button>
           </div>
         </div>

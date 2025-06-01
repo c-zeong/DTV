@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, nextTick, ref, defineExpose, onBeforeUnmount } from 'vue'
+import { onMounted, watch, nextTick, ref, onBeforeUnmount } from 'vue'
 import Cate1List from './components/Cate1List.vue'
 import Cate2Grid from './components/Cate2Grid.vue'
 import Cate3List from './components/Cate3List.vue'
