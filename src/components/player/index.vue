@@ -898,7 +898,7 @@ onUnmounted(async () => {
   width: 48px;
   height: 48px;
   border: 5px solid #f3f3f3;
-  border-top: 5px solid #FB7299;
+  border-top: 5px solid var(--accent-color-light, #007bff);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
