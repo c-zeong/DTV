@@ -56,7 +56,7 @@
     badgeLevel?: string;
     color?: string;
     isSystem?: boolean; // Flag for system messages
-    type?: 'success' | 'error' | 'info'; // Type of system message for styling
+    type?: string; // Type of system message for styling - changed to string
   }
   
   const props = defineProps<{
@@ -390,5 +390,108 @@
   .success-icon {
     fill: #28a745;
   }
+  
+/* Day Mode Styles */
+:root[data-theme="light"] .danmu-list-wrapper {
+  background-color: var(--primary-bg-light, #ffffff);
+  color: var(--primary-text-light, #333333);
+  border: 1px solid var(--border-color-light, #e0e0e0);
+}
+
+:root[data-theme="light"] .danmu-header {
+  background-color: var(--header-bg-light, #e9ecef);
+  border-bottom: 1px solid var(--border-color-light, #e0e0e0);
+}
+
+:root[data-theme="light"] .danmu-header h4 {
+  color: var(--primary-text-light, #333333);
+}
+
+:root[data-theme="light"] .danmu-messages-area {
+  /* Scrollbar for light theme */
+  scrollbar-color: var(--scrollbar-thumb-light, #cccccc) var(--scrollbar-track-light, #f0f0f0);
+}
+
+:root[data-theme="light"] .danmu-messages-area::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-light, #f0f0f0);
+}
+
+:root[data-theme="light"] .danmu-messages-area::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-light, #cccccc);
+}
+
+:root[data-theme="light"] .danmu-messages-area::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover-light, #aaaaaa);
+}
+
+:root[data-theme="light"] .empty-danmu-placeholder p {
+  color: var(--secondary-text-light, #777777);
+}
+
+:root[data-theme="light"] .danmu-item {
+  background-color: var(--danmu-item-bg-light, #f9f9f9);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border: 1px solid var(--danmu-item-border-light, #eeeeee);
+}
+
+:root[data-theme="light"] .danmu-item:hover {
+  background-color: var(--danmu-item-hover-bg-light, #f0f0f0);
+  transform: none; /* Optional: remove transform for light mode if it feels too busy */
+}
+
+:root[data-theme="light"] .danmu-meta-line {
+  color: var(--meta-text-light, #666666);
+}
+
+:root[data-theme="light"] .danmu-badge {
+  /* Badge colors often remain vibrant, but text inside might need adjustment if bg is light */
+  /* Assuming badge backgrounds like #FB7299 will have white text, which is fine on light theme */
+   color: #ffffff; /* Ensure text on badge is white */
+}
+
+/* Specific badge like Douyu's default - if its CSS var changes with theme */
+/* :root[data-theme="light"] .danmu-badge.douyu-badge-example {
+  background-color: var(--douyu-badge-bg-light, #SOME_LIGHT_BADGE_COLOR);
+  color: var(--douyu-badge-text-light, #333);
+} */
+
+:root[data-theme="light"] .danmu-user {
+  /* color will be set by the userColor function, which generates light HSL values */
+  /* No specific override needed here unless userColor is not theme-aware */
+}
+
+:root[data-theme="light"] .user-level {
+  color: var(--meta-text-light, #888888);
+}
+
+:root[data-theme="light"] .danmu-content {
+  color: var(--primary-text-light, #333333);
+}
+
+:root[data-theme="light"] .danmu-item.system-message {
+  background-color: var(--system-message-bg-light, #e6f7ff); /* Light blueish for general system messages */
+  border-left-color: var(--system-message-border-light, #91d5ff);
+}
+
+:root[data-theme="light"] .danmu-item.system-message .danmu-content {
+  color: var(--system-message-text-light, #0050b3);
+}
+
+:root[data-theme="light"] .danmu-item.system-message.success {
+  background-color: var(--system-success-bg-light, #f6ffed); /* Light green for success */
+  border-left-color: var(--system-success-border-light, #b7eb8f);
+}
+
+:root[data-theme="light"] .danmu-item.system-message.success .danmu-content {
+  color: var(--system-success-text-light, #389e0d);
+}
+
+:root[data-theme="light"] .success-icon {
+  fill: var(--system-success-text-light, #389e0d); /* Match success text color */
+}
+
+:root[data-theme="light"] .connection-status-placeholder.success {
+    color: var(--system-success-text-light, #28a745); /* Consistent green for success */
+}
   
   </style>

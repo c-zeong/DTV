@@ -12,10 +12,12 @@ export interface RustGetStreamUrlPayload {
 
 // This is the structure used in danmakuMessages array and for DanmuList component
 export interface DanmakuMessage {
-  type?: string;       // e.g., 'chatmsg', 'uenter' from Douyu, or general type like 'system'
+  id?: string;         // Added optional id for system messages or other needs
+  type?: string;       // e.g., 'chatmsg', 'uenter' from Douyu, or general type for platform messages
+  isSystem?: boolean;  // Added optional flag for system messages
   uid?: string;        // User ID, if available
   nickname: string;
-  level: string;       // String for display (e.g., user level)
+  level?: string;       // String for display (e.g., user level) - Made optional
   content: string;     // The actual danmaku text or system message content
   badgeName?: string;
   badgeLevel?: string;  // String for display (e.g., fan badge level)

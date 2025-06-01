@@ -57,23 +57,16 @@ const sortedFollowedAnchors = computed(() => {
                             customSortedAnchors.value.every(customAnchor => currentAnchorIds.has(customAnchor.id));
 
   if (customSortedIsValid) {
-    // Additionally, ensure the custom list is up-to-date with props (e.g. live status)
-    // This map ensures that we use the objects from props.followedAnchors (which come from the store)
-    // while maintaining the custom order.
     const propsMap = new Map(props.followedAnchors.map(anchor => [anchor.id, anchor]));
     return customSortedAnchors.value.map(customAnchor => propsMap.get(customAnchor.id)).filter(Boolean) as FollowedStreamer[];
   }
   
-  // Default sort: live first, then by original props order (which might be last followed)
   return [...props.followedAnchors].sort((a, b) => {
     const liveA = a.isLive ? 1 : 0;
     const liveB = b.isLive ? 1 : 0;
     if (liveB !== liveA) {
-      return liveB - liveA; // Live ones first
+      return liveB - liveA; 
     }
-    // If both are live or both are offline, maintain original relative order from store
-    // This part is tricky if store itself doesn't guarantee an order or if a different sub-sort is desired.
-    // For now, we rely on the order from props.followedAnchors (from store).
     return 0; 
   });
 });
@@ -84,16 +77,12 @@ const handleSelectAnchor = (anchor: FollowedStreamer) => {
 
 const handleUnfollow = (payload: {platform: any, id: string} | string) => {
     if (typeof payload === 'string') {
-        // If only id is passed, emit as object with undefined platform, MainLayout will handle it
-        // Or, if Sidebar knows the platform, it can specify it.
-        // For now, let MainLayout decide based on just ID if it must.
         emit('unfollow', { platform: undefined, id: payload }); 
     } else {
-        emit('unfollow', payload); // Pass the {platform, id} object
+        emit('unfollow', payload); 
     }
 };
 
-// 处理列表重新排序
 const handleReorderList = (reorderedList: FollowedStreamer[]) => {
   customSortedAnchors.value = [...reorderedList];
   emit('reorderList', reorderedList);
@@ -105,18 +94,27 @@ defineExpose({ router });
 <style scoped>
 .app-sidebar {
   width: 240px;
-  background: var(--component-bg);
+  /* Default to dark mode background variable */
+  background-color: var(--sidebar-bg-dark, #18181b); /* Fallback if var not defined */
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color); /* Assuming --border-color is themed */
   padding: 16px 0;
   transition: background-color 0.3s ease, border-color 0.3s ease;
+  color: var(--secondary-text); /* Default text color, might need light mode override */
+}
+
+/* Light Theme Overrides for Sidebar */
+:root[data-theme="light"] .app-sidebar {
+  background-color: var(--sidebar-bg-light, #f6f6f6);
+  border-right-color: var(--border-color-light, #e2e8f0); /* Define if --border-color isn't fully themed */
+  color: var(--sidebar-nav-item-text-light, #4A5568);
 }
 
 .navigation {
   display: flex;
   flex-direction: column;
-  padding: 0 12px;
+  padding: 0 8px;
   margin-bottom: 8px;
   gap: 12px;
   margin-top: 12px;
@@ -128,15 +126,17 @@ defineExpose({ router });
   justify-content: flex-start;
   padding: 8px 16px;
   border-radius: 10px;
-  color: var(--secondary-text);
   text-decoration: none;
   transition: all 0.25s ease;
   font-size: 14px;
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  background: rgba(255, 255, 255, 0.03);
   position: relative;
   overflow: hidden;
+
+  /* Dark Mode Default Styles (mostly from original) */
+  color: var(--secondary-text, #a0aec0);
+  background: rgba(255, 255, 255, 0.03); /* Subtle bg for dark */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .nav-item::before {
@@ -146,54 +146,107 @@ defineExpose({ router });
   left: 0;
   width: 4px;
   height: 100%;
-  background: transparent;
+  background: transparent; /* Default transparent */
   transition: all 0.25s ease;
 }
 
-.nav-item:hover {
-  background: var(--card-hover-bg);
-  color: var(--primary-text);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+/* Dark Mode Hover/Active for ::before (using new colors) */
+:root[data-theme="dark"] .nav-item:hover::before {
+  background: var(--sidebar-nav-item-hover-border-dark, rgba(0, 218, 198, 0.3));
 }
-
-.nav-item:hover::before {
-  background: rgba(80, 130, 255, 0.2);
+:root[data-theme="dark"] .nav-item.is-active::before {
+  background: var(--sidebar-nav-item-active-border-dark, #00DAC6);
+  box-shadow: 0 0 10px var(--sidebar-nav-item-active-border-shadow-dark, rgba(0, 218, 198, 0.4));
 }
-
-.nav-item.is-active {
-  background: rgba(255, 255, 255, 0.05);
-  color: #5b84ff;
+/* Dark Mode text color for active item (original blue) */
+:root[data-theme="dark"] .nav-item.is-active {
+  color: #FFFFFF;
   font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+:root[data-theme="dark"] .nav-item:hover {
+  background: var(--card-hover-bg, rgba(255,255,255,0.06)); /* Use themed or original fallback */
+  color: var(--primary-text, #e2e8f0); /* Use themed or original fallback */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Original hover shadow */
+}
 
-.nav-item.is-active::before {
-  background: #5b84ff;
-  box-shadow: 0 0 10px rgba(91, 132, 255, 0.5);
+
+/* Light Theme Overrides for Nav Item */
+:root[data-theme="light"] .nav-item {
+  background: var(--sidebar-nav-item-bg-light, #FFFFFF);
+  color: #4A5568; /* Updated non-active light mode text color - lighter gray */
+  box-shadow: var(--sidebar-nav-item-shadow-light, 0 2px 4px rgba(0,0,0,0.06));
+}
+
+:root[data-theme="light"] .nav-item:hover {
+  background: var(--sidebar-nav-item-hover-bg-light, #F7FAFC);
+  color: #2D3748; /* Updated hover light mode text color - darker gray, but not black */
+  transform: translateY(-1px);
+  box-shadow: var(--sidebar-nav-item-hover-shadow-light, 0 5px 10px rgba(0,0,0,0.08));
+}
+
+:root[data-theme="light"] .nav-item.is-active {
+  background: var(--sidebar-nav-item-active-bg-light, #FFFFFF);
+  color: #1A202C; /* Active color remains deep black */
+  font-weight: 600;
+  box-shadow: var(--sidebar-nav-item-active-shadow-light, 0 5px 12px rgba(0,0,0,0.1));
+}
+
+:root[data-theme="light"] .nav-item:hover::before {
+  background: var(--sidebar-nav-item-hover-border-light, rgba(66, 153, 225, 0.4));
+}
+
+:root[data-theme="light"] .nav-item.is-active::before {
+  background: var(--sidebar-nav-item-active-border-light, #4299E1);
+  box-shadow: 0 0 8px var(--sidebar-nav-item-active-border-light, rgba(66, 153, 225, 0.5)); /* Shadow for light active border */
+}
+
+/* Night Mode: Specific background for Douyu and Douyin nav items */
+:root[data-theme="dark"] .nav-item[href="/"],
+:root[data-theme="dark"] .nav-item[href="/douyin"] {
+  background-color: #2d2f38;
+}
+
+/* Ensure hover and active states also use this specific background in night mode for Douyu and Douyin */
+:root[data-theme="dark"] .nav-item[href="/"]:hover,
+:root[data-theme="dark"] .nav-item[href="/douyin"]:hover,
+:root[data-theme="dark"] .nav-item[href="/"].is-active,
+:root[data-theme="dark"] .nav-item[href="/douyin"].is-active {
+  background-color: #2d2f38;
+  /* If other hover/active effects like text color or shadow need to be different for these specific items, 
+     they would need to be specified here as well. For now, only background is changed. */
 }
 
 .follow-list-component {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 0;
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-    margin-right: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 2px;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: var(--secondary-text);
-  }
+  padding: 0; /* Original padding was 0 */
 }
 
-.app-sidebar {
-  color: var(--text-color);
+/* Apply themed scrollbar for follow list */
+.follow-list-component::-webkit-scrollbar {
+  width: 4px;
 }
+.follow-list-component::-webkit-scrollbar-track {
+  background: transparent;
+  margin-right: 4px; /* Original margin */
+}
+.follow-list-component::-webkit-scrollbar-thumb {
+  background: var(--border-color); /* Themed border color */
+  border-radius: 2px;
+}
+.follow-list-component::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-text); /* Themed secondary text color */
+}
+
+/* Light theme specific scrollbar if needed, otherwise it uses themed vars above */
+:root[data-theme="light"] .follow-list-component::-webkit-scrollbar-thumb {
+  background: var(--border-color-light, #d1d5db); /* Example light scrollbar thumb */
+}
+:root[data-theme="light"] .follow-list-component::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary-light, #9ca3af); /* Example light scrollbar hover */
+}
+
 </style> 

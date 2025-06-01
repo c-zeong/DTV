@@ -191,139 +191,243 @@ const selectCate2 = (cate2: DouyinCategory2) => {
 </script>
 
 <style scoped>
-/* Styles meticulously adapted from Douyu Cate2Grid.vue */
-.cate2-container-dy {
-  padding: 16px 0; 
+/* Styles for DouyinCate2Grid.vue, adapted from Douyu Cate2Grid.vue */
+.cate2-container-dy { /* Douyin: .cate2-container-dy */
+  padding: 14px 12px; /* MODIFIED: top/bottom 14px, left/right 12px */
   display: flex;
   flex-direction: column;
   flex: 1;
   position: relative;
-  overflow: visible; 
-  background: #18181b; /* Changed to #18181b as per request */
+  overflow: visible; /* Douyu: overflow: visible; */
+  background: var(--cate2-grid-area-bg-dark, #18181b); /* Night mode Douyu Cate2 area BG */
 }
 
-.cate2-content-dy {
+:root[data-theme="light"] .cate2-container-dy {
+  background-color: var(--primary-bg, #FFFFFF); /* Light mode for container */
+}
+
+.cate2-content-dy { /* Douyin: .cate2-content-dy */
   position: relative;
-  height: 0; /* Initial height, animated by script */
-  padding-bottom: 8px; /* Matches Douyu .cate2-content */
+  height: 0;
+  padding-bottom: 8px; /* MODIFIED from 10px back to 8px */
   overflow: hidden;
   transition: height 0.4s cubic-bezier(0.33, 0.66, 0.66, 1);
   will-change: height;
   box-sizing: border-box;
 }
 
-/* Animation and scroll handling */
-.cate2-content-dy.animating { /* Class might be added by script if needed for specific overrides during animation */
+.cate2-content-dy.animating { /* Douyin: .cate2-content-dy (if class is used) */
   overflow: hidden !important;
 }
 
-.cate2-scroll-wrapper-dy {
+/* Scroll wrapper styles - ensure class names match Douyin's template */
+.cate2-scroll-wrapper-dy { /* Douyin: .cate2-scroll-wrapper-dy */
   max-height: 100%;
   height: 100%;
-  overflow: hidden; /* Default, hidden */
+  overflow: hidden;
 }
 
-/* Expanded state: allow scrolling but hide scrollbar */
-.cate2-content-dy.is-expanded.scrollable .cate2-scroll-wrapper-dy.allow-scroll {
+.cate2-content-dy.is-expanded .cate2-scroll-wrapper-dy.allow-scroll { /* Adjust if Douyin uses different classes for expanded/scrollable */
   overflow-y: auto !important;
-  -ms-overflow-style: none !important;  /* IE and Edge */
-  scrollbar-width: none !important;  /* Firefox */
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
-.cate2-content-dy.is-expanded.scrollable .cate2-scroll-wrapper-dy.allow-scroll::-webkit-scrollbar {
-  display: none !important;  /* WebKit browsers */
+.cate2-content-dy.is-expanded .cate2-scroll-wrapper-dy.allow-scroll::-webkit-scrollbar {
+  display: none !important;
   width: 0 !important;
   height: 0 !important;
 }
 
-/* Collapsed state: ensure no scrolling */
 .cate2-content-dy:not(.is-expanded) .cate2-scroll-wrapper-dy {
-  overflow: hidden !important;
+   overflow: hidden !important;
 }
 
 
-.cate2-grid-dy {
+.cate2-grid-dy { /* Douyin: .cate2-grid-dy */
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 120px)); 
-  gap: 12px; 
-  justify-content: flex-start; 
-  padding-bottom: 16px; 
-  padding-left: 16px; 
-  padding-right: 16px; 
+  grid-template-columns: repeat(auto-fill, minmax(120px, 120px));
+  gap: 12px;
+  justify-content: flex-start;
+  padding-top: 2px; /* ADDED */
+  padding-left: 2px; /* ADDED (or adjust if padding was from container) */
+  padding-right: 2px; /* ADDED (or adjust if padding was from container) */
+  padding-bottom: 18px; /* MODIFIED from 16px */
+  /* Ensure grid itself also has horizontal padding if .cate2-container-dy has 0 horizontal padding */
+  /* padding-left: 16px; */ /* Removed */
+  /* padding-right: 16px; */ /* Removed */
 }
 
-.cate2-card-dy { 
+/* If .cate2-container-dy already has padding: 16px all around, then the above padding-left/right on .cate2-grid-dy might be removed or set to 0. */
+/* Current .cate2-container-dy has padding: 16px 0; so grid needs its own L/R padding */
+
+
+.cate2-card-dy { /* Douyin: .cate2-card-dy */
   width: 120px; 
-  background: #1f1f23; /* Card background - should stand out against #0A0A0A */
-  border-radius: 8px; 
+  height: var(--cate2-card-height, 36px); /* Douyu var */
   padding: 6px 8px; 
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex; 
-  align-items: center;
-  justify-content: center; 
-  height: 36px; 
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
-  text-align: center;
-  overflow: hidden; 
+  overflow: hidden;
+  text-align: center; 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  background: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  border: 1px solid var(--cate2-card-border-dark, transparent); 
+  color: var(--cate2-card-text-dark, #ccc); 
 }
 
-.cate2-card-dy.active {
-  background: var(--primary-accent-color, #ff5d23);
-  color: var(--primary-accent-text-color, #fff); /* Text color for active card name should also be light */
+:root[data-theme="light"] .cate2-card-dy { /* Douyin: .cate2-card-dy */
+  background-color: var(--content-card-bg-light, #FFFFFF); 
+  border: 1px solid var(--content-card-border-light, #e0e0e0); 
+  box-shadow: var(--content-card-shadow-light, 0 1px 3px rgba(0,0,0,0.08)); 
+  color: var(--main-text-primary-light, #212529);
 }
 
-.cate2-card-dy.active .cate2-name-dy {
-    color: var(--primary-accent-text-color, #fff);
+.cate2-card-dy:hover { /* Douyin: .cate2-card-dy */
+  background-color: var(--cate2-card-hover-bg-dark, rgba(45, 48, 56, 1)); 
+  border: 1px solid transparent;
+  color: var(--cate2-card-text-dark-hover, #ddd); 
+  box-shadow: 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3); /* --- MODIFIED for stronger glow --- */
 }
 
-.cate2-card-dy:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.1); /* Directly from Douyu .cate2-card:hover:not(.active) */
+:root[data-theme="light"] .cate2-card-dy:hover { /* Douyin: .cate2-card-dy */
+  background-color: var(--content-card-hover-bg-light, #f8f9fa); 
+  border: 1px solid transparent;
+  box-shadow: var(--douyu-cate2-hover-shadow-light-glow, 0 0 0 2px rgba(50, 150, 255, 0.35), 0 0 9px rgba(50, 150, 255, 0.2)); 
 }
 
-.cate2-name-dy {
-  font-size: 14px; 
-  color: #f0f0f0; /* Fixed light color for readability on dark #1f1f23 background. Adjust as needed. */
+.cate2-card-dy.active {  /* Douyin: .cate2-card-dy.active */
+  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  border: 1px solid var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); 
+  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); 
+}
+
+/* This rule might be redundant if the one above has :root[data-theme="dark"] or is specific enough */
+:root[data-theme="dark"] .cate2-card-dy.active { /* Douyin: .cate2-card-dy.active */
+  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  border-color: var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); 
+  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); 
+}
+
+:root[data-theme="dark"] .cate2-card-dy.active .cate2-name-dy { /* Douyin: .cate2-name-dy */
+  color: var(--douyu-cate2-active-text-dark-glow-revived, rgb(79, 209, 197)); 
+}
+
+/* Icon style for active dark - check if .cate2-icon-dy exists or if it's direct img */
+:root[data-theme="dark"] .cate2-card-dy.active img { /* Assuming img is direct child or within a generic container */
+  filter: none; 
+}
+
+:root[data-theme="dark"] .cate2-card-dy.active:hover { /* Douyin: .cate2-card-dy.active */
+  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  border-color: transparent;
+  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived-hover, 0 0 0 2.5px rgba(79, 209, 197, 0.55), 0 0 12px rgba(79, 209, 197, 0.4)); 
+}
+
+:root[data-theme="light"] .cate2-card-dy.active { /* Douyin: .cate2-card-dy.active */
+  background-color: var(--douyu-cate2-active-bg-light-scheme-a, #429cdd); 
+  border-color: transparent; 
+  box-shadow: var(--douyu-cate2-active-shadow-light-scheme-a, 0 2px 5px rgba(0,0,0,0.12)); 
+}
+
+:root[data-theme="light"] .cate2-card-dy.active .cate2-name-dy { /* Douyin: .cate2-name-dy */
+  color: var(--douyu-cate2-active-text-light-scheme-a, #FFFFFF);
+}
+
+/* Icon style for active light - check if .cate2-icon-dy exists */
+:root[data-theme="light"] .cate2-card-dy.active img {  /* Assuming img is direct child or within a generic container */
+  filter: none; 
+}
+
+:root[data-theme="light"] .cate2-card-dy.active:hover { /* Douyin: .cate2-card-dy.active */
+  background-color: var(--douyu-cate2-active-bg-light-scheme-a, #429cdd); 
+  border: 1px solid transparent;
+  box-shadow: var(--content-card-hover-shadow-light-larger, 0 5px 12px rgba(0,0,0,0.15)); 
+}
+
+.cate2-name-dy { /* Douyin: .cate2-name-dy */
+  font-size: 14px; /* Douyu: .cate2-name */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2; 
-  width: 100%; 
+  line-height: 1.2; /* Douyu: .cate2-name */
+  flex: 1; /* Added to allow text to take available space and ellipsize */
+  text-align: left; /* Usually better for category names */
 }
 
-.expand-button-dy {
+.expand-button-dy { /* Douyin: .expand-button-dy */
   position: absolute;
-  bottom: 0; 
-  left: 16px; /* Align with grid content area */
-  right: 16px; /* Align with grid content area */
+  bottom: 0;
+  left: 16px; 
+  right: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 0; 
-  cursor: pointer;
-  color: var(--secondary-text, rgba(255, 255, 255, 0.5)); 
-  transition: color 0.2s ease;
-  font-size: 12px; 
-  background: #18181b; /* Douyu Night Mode: #18181b */
-  z-index: 10;
-  border-top: 1px solid var(--border-color-on-dark, rgba(255, 255, 255, 0.1)); /* Border color for dark bg */
-  height: 28px; 
+  padding: 6px 0;
+  font-size: 12px;
+  height: 28px;
   box-sizing: border-box;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.3s ease, border-color 0.3s ease;
+  background: var(--douyu-cate2-expand-btn-bg-dark, #18181b);
+  color: var(--douyu-cate2-expand-btn-text-dark, rgba(255, 255, 255, 0.6));
+  border-top: 1px solid var(--douyu-cate2-expand-btn-border-dark, rgba(255, 255, 255, 0.1));
+  z-index: 10;
 }
 
-.expand-button-dy:hover {
-  color: var(--primary-text, #fff); /* Themed */
+.expand-button-dy:hover { /* Douyin: .expand-button-dy */
+  color: var(--douyu-cate2-expand-btn-hover-text-dark, #ffffff);
 }
 
-.expand-icon-dy {
-  margin-left: 4px; /* Douyu */
-  transition: transform 0.4s cubic-bezier(0.33, 0.66, 0.66, 1); /* Douyu */
-  width: 12px; /* Douyu */
-  height: 12px; /* Douyu */
-  stroke: currentColor; /* Inherits color from .expand-button-dy */
+:root[data-theme="light"] .expand-button-dy { /* Douyin: .expand-button-dy */
+  background: var(--douyu-cate2-expand-btn-bg-light, var(--primary-bg, #ffffff));
+  color: var(--douyu-cate2-expand-btn-text-light, var(--secondary-text, #4b5563));
+  border-top: 1px solid var(--douyu-cate2-expand-btn-border-light, var(--border-color-light, #e5e7eb));
 }
 
+:root[data-theme="light"] .expand-button-dy:hover { /* Douyin: .expand-button-dy */
+  color: var(--douyu-cate2-expand-btn-hover-text-light, var(--primary-text, #1f2937));
+}
+
+.expand-icon-dy { /* Douyin: .expand-icon-dy */
+  margin-left: 4px;
+  transition: transform 0.4s cubic-bezier(0.33, 0.66, 0.66, 1);
+  width: 12px; /* Original Douyin was 12px, Douyu was 16px, keeping 12px */
+  height: 12px;
+}
+
+/* Stroke colors for expand icon - Douyin uses .expand-icon-dy */
+:root[data-theme="dark"] .expand-button-dy .expand-icon-dy {
+  stroke: var(--douyu-cate2-expand-btn-text-dark, rgba(255, 255, 255, 0.6));
+}
+:root[data-theme="dark"] .expand-button-dy:hover .expand-icon-dy {
+  stroke: var(--douyu-cate2-expand-btn-hover-text-dark, #ffffff);
+}
+
+:root[data-theme="light"] .expand-button-dy .expand-icon-dy {
+  stroke: var(--douyu-cate2-expand-btn-text-light, var(--secondary-text, #4b5563));
+}
+:root[data-theme="light"] .expand-button-dy:hover .expand-icon-dy {
+  stroke: var(--douyu-cate2-expand-btn-hover-text-light, var(--primary-text, #1f2937));
+}
+
+/* Additional styles from Douyu that might be needed if Douyin lacks them */
+/* If Douyin cards DO have images like <img src="..."/> directly inside .cate2-card-dy: */
+.cate2-card-dy img {
+  width: 24px; /* Match Douyu's .cate2-icon img */
+  height: 24px; /* Match Douyu's .cate2-icon img */
+  object-fit: cover; 
+  border-radius: 4px; 
+  transition: filter 0.2s ease;
+}
+
+/* Ensure expand icon rotates */
 .expand-icon-dy.is-expanded {
-  transform: rotate(180deg); /* Douyu */
+  transform: rotate(180deg);
 }
+
 </style> 

@@ -167,13 +167,18 @@ onActivated(() => {
 .category-list {
   display: flex;
   flex-direction: column;
-  background: var(--component-bg); /* Use theme variable */
-  color: var(--text-color); /* Use theme variable */
+  background: var(--component-bg); /* Night mode default */
+  color: var(--text-color); /* Night mode default */
   max-height: 280px; /* Default max height from Douyu */
   min-height: 200px; /* Default min height from Douyu */
   overflow: hidden;
-  transition: max-height 0.4s cubic-bezier(0.33, 0.66, 0.66, 1); /* Douyu transition */
+  transition: max-height 0.4s cubic-bezier(0.33, 0.66, 0.66, 1), background-color 0.3s ease, color 0.3s ease; /* Douyu transition */
   width: 100%;
+}
+
+:root[data-theme="light"] .category-list {
+  background-color: var(--main-bg-light, #FFFFFF);
+  color: var(--main-text-primary-light, #212529);
 }
 
 .category-list.is-expanded {
@@ -191,6 +196,10 @@ onActivated(() => {
   height: 100%;
 }
 
+:root[data-theme="light"] .loading-state {
+  color: var(--main-text-secondary-light, #495057);
+}
+
 /* Re-add loading spinner styles if you have one, or adapt from Douyu */
 .loading-spinner {
   width: 30px;
@@ -202,9 +211,18 @@ onActivated(() => {
   margin-bottom: 15px;
 }
 
+:root[data-theme="light"] .loading-spinner {
+  border-color: var(--border-color-light-softer, rgba(0,0,0,0.1)); /* Softer track for light */
+  border-top-color: var(--accent-color-light, #007bff); /* Accent for spinner highlight */
+}
+
 .loading-text {
   font-size: 14px;
   color: var(--secondary-text); /* Use theme variable */
+}
+
+:root[data-theme="light"] .loading-text {
+  color: var(--main-text-secondary-light, #495057);
 }
 
 @keyframes spin {

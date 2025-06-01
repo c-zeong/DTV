@@ -153,7 +153,7 @@
     top: 2px; /* Small inset from container edges */
     bottom: 2px;
     height: calc(100% - 4px); /* Full height within insets */
-    background-color: #FB7299; /* Accent color */
+    background-color: #439ed9; /* MODIFIED - Unified highlight color */
     z-index: 0; /* Behind text and icons */
     border-radius: 4px; /* Rounded corners for the highlight pill itself */
     transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
@@ -263,7 +263,7 @@
   }
   
   .status-tag.live {
-    background: linear-gradient(135deg, #ff4757, #ff6b81);
+    background: #32b65c; /* MODIFIED - Unified live color */
   }
   
   .status-tag.replay {
@@ -295,6 +295,82 @@
     0% { text-shadow: 0 0 2px rgba(251, 114, 153, 0); }
     50% { text-shadow: 0 0 6px rgba(251, 114, 153, 0.7); }
     100% { text-shadow: 0 0 2px rgba(251, 114, 153, 0); }
+  }
+
+  /* Day Mode Styles */
+  :root[data-theme="light"] .streamer-info {
+    /* No specific background needed for the root if parent provides it */
+  }
+
+  :root[data-theme="light"] .avatar-wrapper {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color-light, #e0e0e0);
+    background: var(--content-bg-light, #ffffff);
+  }
+
+  :root[data-theme="light"] .avatar-wrapper:hover {
+    border-color: var(--border-color-hover-light, #cccccc);
+  }
+
+  :root[data-theme="light"] .avatar-fallback {
+    color: var(--primary-text-light, #333333);
+    background: linear-gradient(135deg, #e0e0e0, #f0f0f0);
+  }
+
+  :root[data-theme="light"] .room-title {
+    color: var(--primary-text-light, #212529);
+  }
+
+  :root[data-theme="light"] .streamer-name {
+    color: var(--secondary-text-light, #555555);
+  }
+
+  :root[data-theme="light"] .id-follow-container {
+    background-color: var(--button-group-bg-light, #e9ecef); /* Light gray background for the container */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  }
+
+  :root[data-theme="light"] .id-follow-container::before {
+    background-color: #439ed9; /* MODIFIED - Unified highlight color */
+  }
+
+  :root[data-theme="light"] .streamer-id,
+  :root[data-theme="light"] .follow-btn {
+    color: var(--button-group-text-light, #495057); /* Text color for ID and button text before highlight */
+  }
+
+  :root[data-theme="light"] .streamer-id.text-active-on-highlight,
+  :root[data-theme="light"] .follow-btn.text-active-on-highlight .follow-text,
+  :root[data-theme="light"] .follow-btn.text-active-on-highlight .follow-icon-wrapper svg {
+    color: white !important; /* Text color when highlighted in day mode */
+  }
+
+  :root[data-theme="light"] .status-tag {
+    color: #ffffff; /* Text color on status tags is usually white for contrast */
+  }
+
+  :root[data-theme="light"] .status-tag.live {
+    background: #32b65c; /* MODIFIED - Unified live color */
+  }
+
+  :root[data-theme="light"] .status-tag.replay {
+    background: linear-gradient(135deg, var(--status-replay-bg-start-light, #007bff), var(--status-replay-bg-end-light, #0056b3)); /* Blue gradient for replay */
+  }
+
+  :root[data-theme="light"] .status-tag.offline {
+    background: var(--status-offline-bg-light, #6c757d); /* Gray for offline */
+    color: var(--status-offline-text-light, #ffffff);
+  }
+
+  :root[data-theme="light"] .viewers-tag {
+    color: var(--secondary-text-light, #555555);
+    background: var(--tag-bg-light, #f0f0f0);
+    /* border: 1px solid var(--border-color-light, #e0e0e0); Optional border */
+  }
+
+  :root[data-theme="light"] .viewers-tag svg {
+    color: var(--icon-color-light, #888888);
+    opacity: 1;
   }
   </style>
   

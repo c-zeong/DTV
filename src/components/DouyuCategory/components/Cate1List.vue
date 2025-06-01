@@ -31,8 +31,14 @@ defineEmits<{
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  background: #1f1f23;
+  background: var(--cate1-list-bg-dark, #1f1f23); /* Night mode default */
   flex-shrink: 0;
+  transition: background-color 0.3s ease;
+}
+
+:root[data-theme="light"] .cate1-list {
+  background-color: var(--primary-bg, #FFFFFF); /* Use --primary-bg */
+  color: var(--primary-text); /* Ensure text color is also themed */
 }
 
 .cate1-item {
@@ -42,15 +48,44 @@ defineEmits<{
   font-size: 13px;
   border-radius: 20px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent; /* Add for consistent box sizing with active state */
+  /* Night mode default styles */
+  background: var(--cate1-item-bg-dark, rgba(255, 255, 255, 0.1));
+  color: var(--cate1-item-text-dark, #e0e0e0); 
+}
+
+:root[data-theme="light"] .cate1-item {
+  background-color: var(--control-bg-light, #f0f2f5);
+  color: var(--control-text-light, #343a40);
+  border-color: var(--control-border-light, #ced4da); /* Example light border */
 }
 
 .cate1-item:hover {
-  background: rgba(255, 255, 255, 0.2);
+  /* Night mode hover */
+  background: var(--cate1-item-hover-bg-dark, rgba(255, 255, 255, 0.2));
+  color: var(--primary-text, #FFFFFF); /* Brighter text on hover for dark */
 }
 
+:root[data-theme="light"] .cate1-item:hover {
+  background-color: var(--control-hover-bg-light, #e2e6ea);
+  border-color: var(--control-hover-border-light, #adb5bd);
+}
+
+/* Night Mode Active - Matches current Cate2 active style */
 .cate1-item.active {
-  background: #ff5d23;
-  color: #fff;
+  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); /* Match Cate2 unselected night bg */
+  border: 1px solid var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197));
+  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3));
+  color: var(--douyu-cate2-active-text-dark-glow-revived, rgb(79, 209, 197));
+  font-weight: 500;
+}
+
+/* Light Mode Active - Matches current Cate2 active style */
+:root[data-theme="light"] .cate1-item.active {
+  background-color: var(--douyu-cate2-active-bg-light-scheme-a, #429cdd); 
+  border-color: transparent; 
+  box-shadow: var(--douyu-cate2-active-shadow-light-scheme-a, 0 2px 5px rgba(0,0,0,0.12)); 
+  color: var(--douyu-cate2-active-text-light-scheme-a, #FFFFFF); 
+  font-weight: 500;
 }
 </style>

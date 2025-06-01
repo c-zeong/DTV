@@ -164,159 +164,192 @@ const goToPlayer = (roomId: string) => {
 </script>
 
 <style scoped>
-/* Styles adapted from Douyu StreamerList/index.vue - use theme variables */
-.douyin-live-list-container {
+/* Styles for DouyinStreamerList/index.vue, adapted from DouyuStreamerList/index.vue */
+.douyin-live-list-container { /* Original: .live-list-container-infinite */
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-  background-color: var(--component-bg, #18181b);
-  overflow: hidden;
+  background-color: var(--primary-bg); /* Douyu style */
+  color: var(--primary-text); /* Douyu style */
+  overflow: hidden; 
+  transition: background-color 0.3s ease, color 0.3s ease; /* Douyu style */
 }
 
+/* Loading/empty states - class names are similar, apply Douyu's text color */
 .loading-initial-state,
 .no-streamers-state,
 .no-category-state,
 .loading-more-indicator,
-.error-state-message {
+.error-state-message { /* .error-state-message is specific to Douyin, but style similarly */
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
-  color: var(--secondary-text, #888);
+  color: var(--secondary-text); /* Douyu style for text color */
   font-size: 15px;
   text-align: center;
 }
-.loading-initial-state, .no-streamers-state, .no-category-state {
+.loading-initial-state, .no-streamers-state, .no-category-state, .error-state-message { /* Added .error-state-message here */
     flex-grow: 1; 
 }
-.loading-more-indicator, .error-state-message {
+.loading-more-indicator { /* Retain Douyin's, or make it match Douyu's if different */
     min-height: 60px; 
 }
 
+/* Scroll area - class name is the same */
 .live-grid-scroll-area {
   flex-grow: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 24px;
+  padding: 16px 24px; /* Douyu style */
   position: relative; 
-  scrollbar-width: thin; 
-  scrollbar-color: var(--scrollbar-thumb-color, #444) var(--scrollbar-track-color, #18181b);
+  scrollbar-width: thin; /* Douyu style */
+  scrollbar-color: var(--scrollbar-thumb-bg, #444) var(--scrollbar-track-bg, #18181b); /* Douyu style */
+}
+:root[data-theme="light"] .live-grid-scroll-area {
+  scrollbar-color: var(--scrollbar-thumb-bg-light, #adb5bd) var(--scrollbar-track-bg-light, #e9ecef); /* Douyu style */
 }
 
 .live-grid-scroll-area::-webkit-scrollbar {
-  width: 8px;
+  width: 8px; /* Douyu style */
 }
 .live-grid-scroll-area::-webkit-scrollbar-track {
-  background: var(--scrollbar-track-color, #18181b);
+  background: var(--scrollbar-track-bg, #18181b); /* Douyu style */
 }
-.live-grid-scroll-area::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb-color, #444);
-  border-radius: 4px;
-  border: 2px solid var(--scrollbar-track-color, #18181b);
+:root[data-theme="light"] .live-grid-scroll-area::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-bg-light, #e9ecef); /* Douyu style */
 }
 
-.live-grid-douyin {
+.live-grid-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-bg, #444); /* Douyu style */
+  border-radius: 4px; /* Douyu style */
+  border: 2px solid var(--scrollbar-track-bg, #18181b); /* Douyu style */
+}
+:root[data-theme="light"] .live-grid-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-bg-light, #adb5bd); /* Douyu style */
+  border: 2px solid var(--scrollbar-track-bg-light, #e9ecef); /* Douyu style */
+}
+
+/* Grid itself */
+.live-grid-douyin { /* Original: .live-grid-infinite */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* Douyu style */
   gap: 24px; /* Douyu style */
   width: 100%;
 }
 
-.streamer-card-douyin {
-  background-color: var(--card-bg, #202023); 
+/* Streamer card */
+.streamer-card-douyin { /* Original: .streamer-card-revised */
+  background-color: var(--card-bg); /* Douyu style */
+  color: var(--primary-text); /* Douyu style */
   border-radius: 8px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, background-color 0.3s ease; /* Douyu style */
   cursor: pointer;
   border: 1px solid transparent; 
+  box-shadow: var(--card-shadow); /* Douyu style */
 }
 
-.streamer-card-douyin:hover {
+:root[data-theme="dark"] .streamer-card-douyin:hover { /* Original: :root[data-theme="dark"] .streamer-card-revised:hover */
   transform: translateY(-4px);
-  box-shadow: 0 6px 12px rgba(0,0,0, 0.2);
-  border-color: var(--card-border-hover-color, #35353a);
+  box-shadow: 0 6px 12px rgba(0,0,0, 0.3); /* Douyu style */
+  border-color: var(--border-color-light); /* Douyu style, careful with var name for dark theme */
+}
+:root[data-theme="light"] .streamer-card-douyin:hover { /* Original: :root[data-theme="light"] .streamer-card-revised:hover */
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0,0,0, 0.15); /* Douyu style */
+  border-color: transparent; /* Douyu style */
+  background-color: var(--streamer-card-hover-bg-light, #f8f9fa); /* Douyu style */
 }
 
-.card-preview-douyin {
+/* Card preview */
+.card-preview-douyin { /* Original: .card-preview-revised */
   width: 100%;
-  aspect-ratio: 16 / 10;
-  background-color: var(--card-preview-bg, #333);
+  aspect-ratio: 16 / 10; /* Douyu style */
+  background-color: var(--secondary-bg); /* Douyu style */
   position: relative;
-  overflow: hidden;
+  overflow: hidden; /* Douyu style */
 }
 
-.preview-image-douyin {
+.preview-image-douyin { /* Original: .preview-image-revised */
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
+  display: block; /* Douyu style */
 }
 
-.viewers-count-overlay-douyin {
+/* Viewers count overlay */
+.viewers-count-overlay-douyin { /* Original: .viewers-count-overlay */
   position: absolute;
   top: 8px;
   right: 8px;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: white;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  background-color: rgba(0, 0, 0, 0.6); /* Douyu style */
+  color: white; /* Douyu style */
+  padding: 3px 8px; /* Douyu style */
+  border-radius: 4px; /* Douyu style */
+  font-size: 0.75rem; /* Douyu style */
   display: flex;
   align-items: center;
+  line-height: 1; /* Douyu style */
 }
 
-.viewers-icon-douyin {
-  margin-right: 4px;
+.viewers-icon-douyin { /* Original: .viewers-icon-revised */
+  margin-right: 4px; /* Douyu style */
 }
 
-.card-info-footer-douyin {
-  padding: 10px;
+/* Card info footer */
+.card-info-footer-douyin { /* Original: .card-info-footer-revised */
   display: flex;
   align-items: center;
-  gap: 10px;
-  background-color: var(--card-footer-bg, var(--card-bg, #202023));
+  padding: 10px; /* Douyu style */
 }
 
-.streamer-avatar-douyin {
+.streamer-avatar-douyin { /* Original: .streamer-avatar-revised */
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  object-fit: cover;
+  margin-right: 10px;
   flex-shrink: 0;
+  object-fit: cover;
+  background-color: #444; /* Douyu style fallback */
 }
 
-.text-details-douyin {
-  overflow: hidden; /* For text ellipsis */
+.text-details-douyin { /* Original: .text-details-revised */
+  overflow: hidden;
   flex-grow: 1;
 }
 
-.room-title-douyin,
-.nickname-douyin {
+.room-title-douyin { /* Original: .room-title-revised */
+  font-size: 0.9rem; /* Douyu style */
+  margin: 0 0 2px 0; /* Douyu style */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Apply Douyu's themed text colors */
+:root[data-theme="dark"] .room-title-douyin {
+  color: var(--streamer-title-text-dark, #e0e0e0);
+}
+:root[data-theme="light"] .room-title-douyin {
+  color: var(--streamer-title-text-light, #000000);
+}
+
+.nickname-douyin { /* Original: .nickname-revised */
+  font-size: 0.8rem; /* Douyu style */
+  color: #909090; /* Douyu style, consider var(--text-secondary-light/dark) */
   margin: 0;
-  color: var(--primary-text, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.room-title-douyin {
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin-bottom: 2px;
-  color: var(--primary-text, #e0e0e0);
-}
-
-.nickname-douyin {
-  font-size: 0.8rem;
-  color: var(--secondary-text, #aaa);
-}
-
+/* Sentinel - class name is the same */
 .scroll-sentinel {
-  height: 1px;
-  width: 100%;
+  height: 10px; /* Douyu style */
+  width: 100%; /* Douyu style */
 }
 </style> 

@@ -264,11 +264,11 @@ defineExpose({
   display: flex;
   flex-direction: column;
   background: #18181b;
-  color: #fff;
+  color: var(--primary-text);
   max-height: 280px;
   min-height: 200px;
   overflow: hidden;
-  transition: max-height 0.4s cubic-bezier(0.33, 0.66, 0.66, 1);
+  transition: max-height 0.4s cubic-bezier(0.33, 0.66, 0.66, 1), background-color 0.3s ease, color 0.3s ease;
   width: 100%;
 }
 
@@ -279,7 +279,6 @@ defineExpose({
 .loading-state {
   padding: 40px 20px;
   text-align: center;
-  color: #aaa;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -299,7 +298,6 @@ defineExpose({
 
 .loading-text {
   font-size: 14px;
-  color: rgba(255,255,255,0.7);
 }
 
 @keyframes spin {
@@ -309,7 +307,6 @@ defineExpose({
 .error-state {
   padding: 40px 20px;
   text-align: center;
-  color: #ff5d23;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -323,16 +320,10 @@ defineExpose({
 
 .reload-btn {
   padding: 6px 16px;
-  background: #ff5d23;
-  color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s;
-}
-
-.reload-btn:hover {
-  background: #ff7d43;
 }
 
 /* 添加新的样式来控制展开/折叠动画 */
@@ -352,5 +343,55 @@ defineExpose({
 .cate2-content.animating {
   overflow: hidden;
   will-change: transform, height;
+}
+
+:root[data-theme="light"] .category-list {
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  box-shadow: var(--content-card-shadow-light);
+}
+
+:root[data-theme="light"] .loading-state .loading-text {
+  color: var(--secondary-text);
+}
+
+:root[data-theme="dark"] .loading-state .loading-text {
+  color: var(--secondary-text);
+}
+
+:root[data-theme="light"] .error-state {
+  color: var(--error-color);
+}
+
+:root[data-theme="dark"] .error-state {
+   color: var(--error-color);
+}
+
+:root[data-theme="light"] .error-state .error-message {
+  color: var(--error-color);
+}
+
+:root[data-theme="dark"] .error-state .error-message {
+  color: var(--error-color); 
+}
+
+:root[data-theme="light"] .reload-btn {
+  background-color: var(--accent-color);
+  color: var(--accent-text);
+  border: 1px solid transparent;
+}
+
+:root[data-theme="light"] .reload-btn:hover {
+  background-color: var(--button-hover-bg);
+}
+
+:root[data-theme="dark"] .reload-btn {
+  background: var(--accent-color);
+  color: var(--accent-text);
+  border: none;
+}
+
+:root[data-theme="dark"] .reload-btn:hover {
+  background: var(--button-hover-bg);
 }
 </style>

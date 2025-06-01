@@ -449,7 +449,7 @@ async function startCurrentDanmakuListener(platform: Platform, roomId: string, a
         content: '弹幕连接成功！',
         isSystem: true,
         type: 'success',
-        color: '#28a745' // Optional: define color directly or let CSS handle via .system-message.success
+        color: '#28a745'
       };
       danmakuMessages.value.push(successMessage);
 
@@ -461,30 +461,26 @@ async function startCurrentDanmakuListener(platform: Platform, roomId: string, a
     console.error(`[Player] Failed to start danmaku listener for ${platform}/${roomId}:`, error);
     isDanmakuListenerActive.value = false; 
 
-    // Optionally, push an error system message to danmakuMessages here too
     const errorMessage: DanmakuMessage = {
       id: `system-err-${Date.now()}`,
       nickname: '系统消息',
       content: '弹幕连接失败，请尝试刷新播放器。',
       isSystem: true,
-      type: 'error', // You would need to define styles for .system-message.error in DanmuList.vue
-      color: '#dc3545' // Example error color
+      type: 'error',
+      color: '#dc3545'
     };
     danmakuMessages.value.push(errorMessage);
   }
 }
 
-async function stopCurrentDanmakuListener(platform?: Platform, roomId?: string) {
+async function stopCurrentDanmakuListener(platform?: Platform, roomId?: string | null | undefined) {
   console.log(`[Player] stopCurrentDanmakuListener CALLED. Platform: ${platform}, RoomID: ${roomId}, unlistenDanmakuFn exists: ${!!unlistenDanmakuFn}`);
 
-  if (platform) { // Check if platform is provided
+  if (platform) {
     console.log(`[Player] stopCurrentDanmakuListener: Calling platform-specific stop for ${platform}`);
     if (platform === Platform.DOUYU) {
-      // Douyu needs roomId and the unlisten function
-      // Ensure roomId is not null/undefined if platform is Douyu, though type system should help.
       await stopDouyuDanmaku(roomId!, unlistenDanmakuFn); 
     } else if (platform === Platform.DOUYIN) {
-      // Douyin only needs the unlisten function
       await stopDouyinDanmaku(unlistenDanmakuFn);
     }
     // After platform-specific stop, it's assumed unlistenDanmakuFn (if used by the platform's stop function) is handled.
@@ -1052,4 +1048,108 @@ onUnmounted(async () => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding-bottom: 20px;
 }
+
+/* Day Mode Styles */
+:root[data-theme="light"] .player-page {
+  background: var(--primary-bg, #f0f2f5); /* Light background */
+}
+
+:root[data-theme="light"] .player-container {
+  background-color: var(--content-bg-light, #ffffff);
+  backdrop-filter: none; /* Remove blur for light mode if desired, or adjust */
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-color-light, #e0e0e0);
+  box-shadow: var(--content-shadow-light, 0 4px 12px rgba(0, 0, 0, 0.08));
+}
+
+:root[data-theme="light"] .danmu-panel {
+  background-color: var(--content-bg-light, #ffffff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-color-light, #e0e0e0);
+  box-shadow: var(--content-shadow-light, 0 4px 12px rgba(0, 0, 0, 0.08));
+}
+
+:root[data-theme="light"] .danmu-panel:hover {
+  transform: translateY(-2px); /* Subtle lift */
+  box-shadow: var(--content-shadow-light-hover, 0 6px 16px rgba(0, 0, 0, 0.12));
+}
+
+:root[data-theme="light"] .player-close-btn {
+  background: var(--button-bg-light, rgba(255, 255, 255, 0.8));
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 1px solid var(--button-border-light, rgba(0, 0, 0, 0.1));
+  color: var(--button-text-light, #333333);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme="light"] .player-close-btn:hover {
+  background: var(--button-hover-bg-light, rgba(245, 245, 245, 0.9));
+  border-color: var(--button-hover-border-light, rgba(0, 0, 0, 0.15));
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme="light"] .empty-player,
+:root[data-theme="light"] .loading-player,
+:root[data-theme="light"] .error-player,
+:root[data-theme="light"] .offline-player {
+  background-color: var(--content-bg-light, #ffffff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-color-light, #e0e0e0);
+  box-shadow: var(--content-shadow-light, 0 4px 12px rgba(0, 0, 0, 0.08));
+  color: var(--secondary-text-light, #555555);
+}
+
+:root[data-theme="light"] .empty-player .empty-icon,
+:root[data-theme="light"] .loading-player .spinner, /* Spinner is handled separately below */
+:root[data-theme="light"] .error-player .error-icon,
+:root[data-theme="light"] .offline-icon svg {
+  color: var(--icon-color-light, #888888);
+  opacity: 0.9;
+}
+
+:root[data-theme="light"] .loading-player .spinner {
+  border: 5px solid var(--spinner-bg-light, #dddddd);
+  border-top: 5px solid var(--accent-color-light, #007bff); /* Example: Blue for light theme */
+}
+
+:root[data-theme="light"] .empty-player h3,
+:root[data-theme="light"] .loading-player h3,
+:root[data-theme="light"] .error-player h3,
+:root[data-theme="light"] .offline-player h3 {
+  color: var(--primary-text-light, #333333);
+}
+
+:root[data-theme="light"] .empty-player p,
+:root[data-theme="light"] .loading-player p,
+:root[data-theme="light"] .error-player p,
+:root[data-theme="light"] .offline-player p {
+  color: var(--secondary-text-light, #555555);
+  opacity: 1;
+}
+
+:root[data-theme="light"] .error-player .retry-btn,
+:root[data-theme="light"] .offline-player .retry-btn {
+  background-color: var(--accent-color-light, #007bff);
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+}
+
+:root[data-theme="light"] .error-player .retry-btn:hover,
+:root[data-theme="light"] .offline-player .retry-btn:hover {
+  background-color: var(--accent-color-hover-light, #0056b3);
+  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.3);
+}
+
+:root[data-theme="light"] .error-player .retry-btn:active,
+:root[data-theme="light"] .offline-player .retry-btn:active {
+  box-shadow: 0 3px 10px rgba(0, 123, 255, 0.15);
+}
+
+:root[data-theme="light"] .streamer-info-offline {
+  border-bottom: 1px solid var(--border-color-light, #e0e0e0);
+}
+
 </style>

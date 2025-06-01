@@ -323,9 +323,16 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--component-bg, #1a1b1e);
-    border-radius: 4px;
+    background: var(--sidebar-bg-dark, #1a1b1e);
+    border-radius: 8px;
+    padding: 8px;
+    box-sizing: border-box;
     overflow: hidden;
+  }
+  
+  /* Light Theme Overrides for Follow List itself */
+  :root[data-theme="light"] .follow-list {
+    background: var(--sidebar-bg-light, #f6f6f6);
   }
   
   /* Header styles */
@@ -335,9 +342,25 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
-    background: var(--header-bg, rgba(25, 26, 31, 0.8));
+    border-bottom: 1px solid var(--border-color-softer, rgba(255, 255, 255, 0.05));
+    background: transparent;
     flex-shrink: 0;
+    border-radius: 0;
+  }
+  
+  :root[data-theme="light"] .list-header {
+    border-bottom-color: var(--border-color-light-softer, rgba(0,0,0,0.05));
+  }
+  
+  :root[data-theme="light"] .list-header .header-title {
+    color: var(--text-primary-light, #2d3748);
+  }
+  :root[data-theme="light"] .list-header .action-btn {
+    color: var(--text-secondary-light, #718096);
+  }
+  :root[data-theme="light"] .list-header .action-btn:hover {
+    color: var(--text-primary-light, #2d3748);
+    background-color: var(--control-hover-bg-light, #edf2f7);
   }
   
   .header-title {
@@ -380,6 +403,17 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   }
   
+  /* Night mode specific hover/active for refresh button */
+  :root[data-theme="dark"] .refresh-btn:not(:disabled):hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+  }
+  
+  :root[data-theme="dark"] .refresh-btn:not(:disabled):active {
+    background-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+  }
+  
   .icon {
     display: flex;
     align-items: center;
@@ -396,7 +430,7 @@
   }
   
   .refresh-btn:disabled {
-    background: rgba(80, 130, 255, 0.15);
+    background: rgba(80, 130, 255, 0.15); /* This purplish background is for when it's actually refreshing/disabled */
     cursor: default;
     transform: none;
   }
@@ -410,7 +444,7 @@
   .list-content {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 8px;
+    padding: 0 8px;
   }
   
   /* Empty state */
@@ -423,6 +457,16 @@
     color: var(--secondary-text, rgba(255, 255, 255, 0.6));
     padding: 16px;
     text-align: center;
+  }
+  
+  :root[data-theme="light"] .empty-state .empty-title {
+    color: var(--text-primary-light, #333);
+  }
+  :root[data-theme="light"] .empty-state .empty-text {
+    color: var(--text-secondary-light, #666);
+  }
+  :root[data-theme="light"] .empty-state .empty-image svg {
+    stroke: var(--text-secondary-light, #aaa);
   }
   
   .empty-image {
@@ -449,53 +493,86 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    max-width: 224px;
+    gap: 8px;
     width: 100%;
+  }
+  
+  :root[data-theme="light"] .streamer-item {
+    background: var(--card-bg-light, #ffffff);
+    color: var(--text-primary-light, #2d3748);
+    box-shadow: var(--card-shadow-light, 0 1px 3px rgba(0,0,0,0.1));
+    border: 1px solid var(--border-color-light, #e2e8f0);
   }
   
   .streamer-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
+    padding: 5px 8px;
     border-radius: 12px;
-    background: var(--card-bg, rgba(255, 255, 255, 0.03));
-    transition: all 0.3s ease;
     cursor: pointer;
+    transition: all 0.2s ease-in-out;
     position: relative;
-    overflow: hidden;
-    border: 1px solid transparent;
+    overflow: hidden; /* Important for rounded corners with backdrop-filter */
+    
+    /* Night mode default background - Glassmorphism RE-APPLIED */
+    background: var(--streamer-item-bg-dark-glass, rgba(53, 51, 64, 0.6)); 
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px); /* Safari */
+    color: var(--text-primary-dark, #e0e0e0);
+    border: 1px solid var(--streamer-item-border-dark-glass, rgba(255, 255, 255, 0.12));
+    box-shadow: var(--streamer-item-shadow-dark, 0 2px 5px rgba(0,0,0,0.2)); 
+  }
+  
+  :root[data-theme="light"] .streamer-item:hover {
+    background: var(--card-hover-bg-light, #f7fafc);
+    box-shadow: var(--card-hover-shadow-light, 0 4px 6px rgba(0,0,0,0.1));
   }
   
   .streamer-item:hover {
-    background: var(--card-hover-bg, rgba(255, 255, 255, 0.05));
+    background: #2C2E33;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
   
   .streamer-item:active {
     transform: translateY(0);
-  }
-  
-  /* Live streamer styling */
-  .streamer-item.is-live {
-    background: linear-gradient(to right, 
-      rgba(16, 185, 129, 0.03) 0%,
-      rgba(16, 185, 129, 0.05) 50%,
-      rgba(16, 185, 129, 0.03) 100%
-    );
     border: 1px solid rgba(16, 185, 129, 0.15);
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
   }
   
+  /* Live streamer styling - Restored card look */
+  .streamer-item.is-live {
+    background: linear-gradient(to right, 
+      rgba(16, 185, 129, 0.15) 0%,
+      rgba(16, 185, 129, 0.20) 50%,
+      rgba(16, 185, 129, 0.15) 100%
+    );
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+  }
+  
+  :root[data-theme="light"] .streamer-item.is-live {
+    background: linear-gradient(to right, 
+      rgba(16, 185, 129, 0.08) 0%,
+      rgba(16, 185, 129, 0.12) 50%,
+      rgba(16, 185, 129, 0.08) 100%
+    );
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+  }
+  
   .streamer-item.is-live:hover {
     background: linear-gradient(to right, 
-      rgba(16, 185, 129, 0.05) 0%,
-      rgba(16, 185, 129, 0.07) 50%,
-      rgba(16, 185, 129, 0.05) 100%
+      rgba(16, 185, 129, 0.2) 0%,
+      rgba(16, 185, 129, 0.25) 50%,
+      rgba(16, 185, 129, 0.2) 100%
     );
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+  }
+  
+  :root[data-theme="light"] .streamer-item.is-live:hover {
+    background: var(--card-hover-bg-light, #f7fafc);
+    box-shadow: var(--card-hover-shadow-light, 0 4px 6px rgba(0,0,0,0.1));
   }
   
   .streamer-item.is-dragging {
@@ -518,8 +595,8 @@
   .item-content {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex: 1;
+    gap: 8px;
+    flex-grow: 1;
     min-width: 0;
   }
   
@@ -533,10 +610,16 @@
     background: var(--card-bg, rgba(255, 255, 255, 0.03));
   }
   
+  :root[data-theme="light"] .avatar-container {
+    background: var(--card-bg-light, #e2e8f0); 
+  }
+  
   .avatar-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    font-size: 16px;
+    font-weight: 600;
   }
   
   .avatar-fallback {
@@ -545,10 +628,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #6b46c1, #3f83f8);
+    background: linear-gradient(135deg, #a0aec0, #718096);
     color: #ffffff;
-    font-size: 16px;
-    font-weight: 600;
+  }
+  
+  :root[data-theme="light"] .avatar-fallback {
+    background: linear-gradient(135deg, #a0aec0, #718096); 
+    color: #ffffff;
   }
   
   .status-container {
@@ -557,7 +643,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    margin-left: 6px;
+    flex-shrink: 0;
   }
   
   .live-indicator {
@@ -606,15 +692,24 @@
     text-align: left;
   }
   
+  :root[data-theme="light"] .nickname {
+    color: var(--text-primary-light, #2d3748);
+  }
+  
   /* Live streamer text styling */
   .streamer-item.is-live .nickname {
     color: rgba(16, 185, 129, 0.9);
     text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
   }
   
+  :root[data-theme="light"] .streamer-item.is-live .nickname {
+    color: #0F7C6F; 
+    text-shadow: none; 
+  }
+  
   .secondary-row {
     font-size: 12px;
-    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    color: #9298a8;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -622,9 +717,18 @@
     text-align: left;
   }
   
-  /* Live streamer subtitle styling */
+  /* Live streamer subtitle styling for dark mode */
   .streamer-item.is-live .secondary-row {
-    color: var(--secondary-text, rgba(255, 255, 255, 0.65));
+    color: #9298a8;
+  }
+  
+  :root[data-theme="light"] .secondary-row {
+    color: var(--text-secondary-light, #718096);
+  }
+  
+  /* Live streamer subtitle styling for light mode */
+  :root[data-theme="light"] .streamer-item.is-live .secondary-row {
+    color: var(--text-secondary-light, #718096);
   }
   
   /* List transitions */

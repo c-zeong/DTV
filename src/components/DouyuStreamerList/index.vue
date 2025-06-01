@@ -139,8 +139,10 @@ const goToPlayer = (roomId: string) => {
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-  background-color: #18181b;
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
   overflow: hidden; 
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .live-list-header {
@@ -165,7 +167,7 @@ const goToPlayer = (roomId: string) => {
   justify-content: center;
   align-items: center;
   padding: 20px;
-  color: #888;
+  color: var(--secondary-text);
   font-size: 15px;
   text-align: center;
 }
@@ -183,19 +185,30 @@ const goToPlayer = (roomId: string) => {
   padding: 16px 24px;
   position: relative; 
   scrollbar-width: thin; 
-  scrollbar-color: #444 #18181b;
+  scrollbar-color: var(--scrollbar-thumb-bg, #444) var(--scrollbar-track-bg, #18181b);
+}
+:root[data-theme="light"] .live-grid-scroll-area {
+  scrollbar-color: var(--scrollbar-thumb-bg-light, #adb5bd) var(--scrollbar-track-bg-light, #e9ecef);
 }
 
 .live-grid-scroll-area::-webkit-scrollbar {
   width: 8px;
 }
 .live-grid-scroll-area::-webkit-scrollbar-track {
-  background: #18181b;
+  background: var(--scrollbar-track-bg, #18181b);
 }
+:root[data-theme="light"] .live-grid-scroll-area::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-bg-light, #e9ecef);
+}
+
 .live-grid-scroll-area::-webkit-scrollbar-thumb {
-  background-color: #444;
+  background-color: var(--scrollbar-thumb-bg, #444);
   border-radius: 4px;
-  border: 2px solid #18181b;
+  border: 2px solid var(--scrollbar-track-bg, #18181b);
+}
+:root[data-theme="light"] .live-grid-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-bg-light, #adb5bd);
+  border: 2px solid var(--scrollbar-track-bg-light, #e9ecef);
 }
 
 .live-grid-infinite {
@@ -206,26 +219,34 @@ const goToPlayer = (roomId: string) => {
 }
 
 .streamer-card-revised {
-  background-color: #202023; 
+  background-color: var(--card-bg);
+  color: var(--primary-text);
   border-radius: 8px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, background-color 0.3s ease;
   cursor: pointer;
   border: 1px solid transparent; 
+  box-shadow: var(--card-shadow);
 }
 
-.streamer-card-revised:hover {
+:root[data-theme="dark"] .streamer-card-revised:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 12px rgba(0,0,0, 0.2);
-  border-color: #35353a;
+  box-shadow: 0 6px 12px rgba(0,0,0, 0.3);
+  border-color: var(--border-color-light);
+}
+:root[data-theme="light"] .streamer-card-revised:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0,0,0, 0.15);
+  border-color: transparent;
+  background-color: var(--streamer-card-hover-bg-light, #f8f9fa);
 }
 
 .card-preview-revised {
   width: 100%;
   aspect-ratio: 16 / 10;
-  background-color: #333;
+  background-color: var(--secondary-bg);
   position: relative;
   overflow: hidden;
 }
@@ -278,11 +299,17 @@ const goToPlayer = (roomId: string) => {
 
 .room-title-revised {
   font-size: 0.9rem;
-  color: #e0e0e0;
   margin: 0 0 2px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+:root[data-theme="dark"] .room-title-revised {
+  color: var(--streamer-title-text-dark, #e0e0e0);
+}
+:root[data-theme="light"] .room-title-revised {
+  color: var(--streamer-title-text-light, #000000);
 }
 
 .nickname-revised {
