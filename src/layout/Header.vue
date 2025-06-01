@@ -4,7 +4,7 @@
       <div class="search-box">
         <input 
           v-model="searchQuery" 
-          placeholder="搜索斗鱼主播/抖音房间ID" 
+          placeholder="搜索斗鱼主播 / 抖音房间ID" 
           @input="handleSearch"
           @focus="showResults = true"
           @blur="handleBlur"
