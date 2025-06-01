@@ -32,6 +32,7 @@ jobs:
         uses: arduino/setup-protoc@v2 # 使用较新的稳定版本，例如 v2
         with:
           version: '25.x' # 指定一个 protoc 版本，例如 25.x 系列，或根据您的 prost-build 依赖选择
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'

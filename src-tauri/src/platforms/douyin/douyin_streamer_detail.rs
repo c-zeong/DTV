@@ -182,31 +182,35 @@ pub async fn get_douyin_live_stream_url(
                             if response.status().is_redirection() { // 检查是否为重定向状态
                                 if let Some(location_header) = response.headers().get(reqwest::header::LOCATION) {
                                     if let Ok(redirected_url_str) = location_header.to_str() {
-                                        println!("[Douyin Live RS INFO] 重定向到: {}. 将此作为最终 FLV URL.", redirected_url_str);
-                                        final_stream_url = Some(redirected_url_str.to_string());
-                                        // 成功获取新链接，不需要在新链接中检查 "pull-flv"
+                                        if !redirected_url_str.is_empty() {
+                                            println!("[Douyin Live RS INFO] 重定向到: {}. 将此作为最终 FLV URL.", redirected_url_str);
+                                            final_stream_url = Some(redirected_url_str.to_string());
+                                        } else {
+                                            println!("[Douyin Live RS WARN] 重定向 Location header 为空. 使用原始 FLV URL: {}", initial_flv_url_candidate);
+                                            final_stream_url = Some(initial_flv_url_candidate.to_string());
+                                        }
                                     } else {
-                                        println!("[Douyin Live RS WARN] 转换 Location header 为字符串失败. 放弃 FLV URL.");
-                                        final_stream_url = None;
+                                        println!("[Douyin Live RS WARN] 转换 Location header 为字符串失败. 使用原始 FLV URL: {}", initial_flv_url_candidate);
+                                        final_stream_url = Some(initial_flv_url_candidate.to_string());
                                     }
                                 } else {
-                                    println!("[Douyin Live RS WARN] 重定向响应中未找到 Location header. 放弃 FLV URL.");
-                                    final_stream_url = None;
+                                    println!("[Douyin Live RS WARN] 重定向响应中未找到 Location header. 使用原始 FLV URL: {}", initial_flv_url_candidate);
+                                    final_stream_url = Some(initial_flv_url_candidate.to_string());
                                 }
-                            } else {
-                                println!("[Douyin Live RS WARN] 请求 '{}' 未导致重定向 (状态: {}). 放弃 FLV URL.", initial_flv_url_candidate, response.status());
-                                final_stream_url = None;
+                            } else { // 不是重定向 (可能是成功 200 OK, 或其他错误状态码)
+                                println!("[Douyin Live RS INFO] 请求 '{}' 未重定向 (状态: {}). 使用原始 FLV URL.", initial_flv_url_candidate, response.status());
+                                final_stream_url = Some(initial_flv_url_candidate.to_string());
                             }
                         }
-                        Err(e) => {
-                            println!("[Douyin Live RS WARN] 解析 '{}' 的重定向请求失败: {}. 放弃 FLV URL.", initial_flv_url_candidate, e);
-                            final_stream_url = None;
+                        Err(e) => { // 请求发送失败
+                            println!("[Douyin Live RS WARN] 解析 '{}' 的重定向请求失败: {}. 使用原始 FLV URL.", initial_flv_url_candidate, e);
+                            final_stream_url = Some(initial_flv_url_candidate.to_string());
                         }
                     }
                 }
-                Err(e) => {
-                    println!("[Douyin Live RS WARN] 构建 reqwest 客户端用于重定向失败: {}. 放弃 FLV URL.", e);
-                    final_stream_url = None;
+                Err(e) => { // 构建 HTTP 客户端失败
+                    println!("[Douyin Live RS WARN] 构建 reqwest 客户端用于重定向失败: {}. 使用原始 FLV URL.", e);
+                    final_stream_url = Some(initial_flv_url_candidate.to_string());
                 }
             }
         }
