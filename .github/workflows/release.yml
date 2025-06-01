@@ -13,8 +13,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.platform }}
+        include:
+          - platform: macos-apple-silicon
+            os: macos-latest # Runner OS
+            target: aarch64-apple-darwin
+          - platform: macos-intel
+            os: macos-latest # Runner OS, will use Rosetta for x86_64 if needed or action handles it
+            target: x86_64-apple-darwin
+          - platform: ubuntu-latest # For Linux
+            os: ubuntu-latest
+            # target: x86_64-unknown-linux-gnu # tauri-action typically infers this for ubuntu-latest
+          - platform: windows-latest # For Windows
+            os: windows-latest
+            # target: x86_64-pc-windows-msvc # tauri-action typically infers this for windows-latest
+
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,16 +39,20 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # Pass the target to rust-toolchain if it's set in the matrix
+          # This ensures the correct toolchain is available for cross-compilation if needed
+          target: ${{ matrix.target }}
 
       # 新增：安装 protoc
       - name: Install protoc
-        uses: arduino/setup-protoc@v2 # 使用较新的稳定版本，例如 v2
+        uses: arduino/setup-protoc@v2
         with:
-          version: '25.x' # 指定一个 protoc 版本，例如 25.x 系列，或根据您的 prost-build 依赖选择
+          version: '25.x'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' # Corrected condition to use matrix.os
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -61,3 +78,7 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
+          # Pass the target to tauri-action if it's set in the matrix
+          target: ${{ matrix.target }}
+          # Optional: Add a suffix to differentiate assets if target is specified
+          # assetSuffix: ${{ matrix.target && format('-{0}', matrix.target) || '' }}
