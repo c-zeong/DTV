@@ -5,7 +5,6 @@ on:
       - 'v*'
   workflow_dispatch:
 
-# 添加权限配置
 permissions:
   contents: write
 
@@ -28,6 +27,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # 新增：安装 protoc
+      - name: Install protoc
+        uses: arduino/setup-protoc@v2 # 使用较新的稳定版本，例如 v2
+        with:
+          version: '25.x' # 指定一个 protoc 版本，例如 25.x 系列，或根据您的 prost-build 依赖选择
+
       - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
         run: |
@@ -40,6 +45,7 @@ jobs:
             patchelf \
             libsoup-3.0 \
             webkit2gtk-4.1
+          # 注意：如果 arduino/setup-protoc 已经处理了 Ubuntu,这里就不需要再单独 apt-get install protobuf-compiler
 
       - name: Install frontend dependencies
         run: npm install
@@ -53,4 +59,4 @@ jobs:
           releaseName: 'DTV ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
-          prerelease: false 
+          prerelease: false
