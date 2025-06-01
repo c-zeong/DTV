@@ -58,15 +58,15 @@ const selectAll = () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 8px 16px 4px 16px;
+  margin: 2px 16px 0 16px;
   padding-bottom: 4px;
 }
 
 .cate3-item {
   /* Shared dimensions and basic properties from cate2-card */
   /* width: 120px; */ /* Cate3 items are usually narrower, let flexbox decide or define custom width if needed */
-  padding: 6px 12px; /* Adjusted padding for typically shorter text */
-  height: var(--cate2-card-height, 36px); /* Match height */
+  padding: 4px 12px;
+  height: 30px;
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -110,14 +110,14 @@ const selectAll = () => {
 /* Night Mode Active (Matches cate2-card night mode active - Revived Glow Style) */
 .cate3-item.active { 
   background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
-  border: 1px solid var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); 
+  border: 1px solid transparent; /* Removed border for night mode active */
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); 
   font-weight: 500; /* Keep existing font-weight for active */
 }
 
 :root[data-theme="dark"] .cate3-item.active {
   background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
-  border-color: var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); 
+  border-color: transparent; /* Removed border for night mode active */
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); 
   /* Text color for active item name specifically handled below */
 }

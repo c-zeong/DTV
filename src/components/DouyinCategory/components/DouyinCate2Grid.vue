@@ -275,7 +275,7 @@ const selectCate2 = (cate2: DouyinCategory2) => {
   display: flex; 
   align-items: center; 
   gap: 8px; 
-  background: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  background: var(--cate2-card-bg-dark, #252731); /* MODIFIED */
   border: 1px solid var(--cate2-card-border-dark, transparent); 
   color: var(--cate2-card-text-dark, #ccc); 
 }
@@ -301,15 +301,15 @@ const selectCate2 = (cate2: DouyinCategory2) => {
 }
 
 .cate2-card-dy.active {  /* Douyin: .cate2-card-dy.active */
-  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
-  border: 1px solid var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); 
+  background-color: var(--cate2-card-bg-dark, #252731); 
+  border: 1px solid transparent; /* Removed border for night mode selected */
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); 
 }
 
 /* This rule might be redundant if the one above has :root[data-theme="dark"] or is specific enough */
 :root[data-theme="dark"] .cate2-card-dy.active { /* Douyin: .cate2-card-dy.active */
-  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
-  border-color: var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); 
+  background-color: var(--cate2-card-bg-dark, #252731); 
+  border-color: transparent; /* Removed border for night mode selected */
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); 
 }
 
@@ -323,7 +323,7 @@ const selectCate2 = (cate2: DouyinCategory2) => {
 }
 
 :root[data-theme="dark"] .cate2-card-dy.active:hover { /* Douyin: .cate2-card-dy.active */
-  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  background-color: var(--cate2-card-bg-dark, #252731); /* MODIFIED */
   border-color: transparent;
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived-hover, 0 0 0 2.5px rgba(79, 209, 197, 0.55), 0 0 12px rgba(79, 209, 197, 0.4)); 
 }

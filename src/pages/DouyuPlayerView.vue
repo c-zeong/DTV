@@ -210,4 +210,20 @@ onMounted(() => {
   border-radius: 5px;
   margin-top: 15px;
 }
+
+/* Day Mode Styles */
+:root[data-theme="light"] .player-view {
+  background-color: var(--main-bg-light, #ffffff);
+  color: var(--main-text-primary-light, #212529);
+}
+
+:root[data-theme="light"] .invalid-room p,
+:root[data-theme="light"] .loading-details p {
+  color: var(--main-text-primary-light, #212529);
+}
+
+:root[data-theme="light"] .invalid-room button {
+  background-color: var(--primary-color-light, #007bff);
+  color: white; /* Assuming button text remains white for contrast on primary color */
+}
 </style> 

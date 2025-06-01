@@ -27,24 +27,22 @@ export async function fetchDouyuStreamerDetails(roomId: string): Promise<Streame
       throw new Error('Failed to retrieve valid room data from backend for Douyu.');
     }
     
-    let currentLiveStatus: LiveStatus = 'OFFLINE';
     const sStatus = typeof roomData.show_status === 'number' ? roomData.show_status : null;
     const vLoop = typeof roomData.video_loop === 'number' ? roomData.video_loop : null;
 
-    if (sStatus === 1) {
-      if (vLoop === 1) {
-        currentLiveStatus = 'REPLAY';
-      } else if (vLoop === 0 || vLoop === null) {
-        currentLiveStatus = 'LIVE';
+    let currentLiveStatus: LiveStatus = 'OFFLINE';
+    const isActuallyLive = sStatus === 1; // True if live or looping
+    const isCurrentlyLooping = isActuallyLive && vLoop === 1; // Explicitly check for loop
+
+    if (isActuallyLive) {
+      if (isCurrentlyLooping) {
+        currentLiveStatus = 'REPLAY'; // REPLAY can signify looping for LiveStatus type
       } else {
-        currentLiveStatus = 'OFFLINE';
-        console.warn(`[StreamerInfo/douyuParser.ts] Room ${roomData.room_id}: show_status is 1, but video_loop is unexpected (${vLoop}). Defaulting to OFFLINE.`);
+        currentLiveStatus = 'LIVE';
       }
     } else {
-      currentLiveStatus = 'OFFLINE';
+      currentLiveStatus = 'OFFLINE'; // Ensure offline if not sStatus === 1
     }
-
-    const isActuallyLive = currentLiveStatus === 'LIVE' || currentLiveStatus === 'REPLAY';
 
     // Note: The DouyuFollowInfo struct from Rust currently doesn't include viewerCount or categoryName.
     // If StreamerDetails needs these, fetch_douyu_room_info in Rust must be updated to extract and return them,
@@ -58,7 +56,8 @@ export async function fetchDouyuStreamerDetails(roomId: string): Promise<Streame
       roomTitle: roomData.room_name ?? 'N/A',
       avatarUrl: roomData.avatar_url ?? null,
       liveStatus: currentLiveStatus,
-      isLive: isActuallyLive,
+      isLive: isActuallyLive, // isLive is true if show_status is 1 (live or looping)
+      isLooping: isCurrentlyLooping, // new field for explicit loop status
       // viewerCount and categoryName would be undefined if not in DouyuRoomInfoFromCommand
       // and not added to the Rust struct.
       viewerCount: undefined, // Placeholder - needs data source
@@ -75,6 +74,7 @@ export async function fetchDouyuStreamerDetails(roomId: string): Promise<Streame
       avatarUrl: null,
       liveStatus: 'UNKNOWN',
       isLive: false,
+      isLooping: false, // Ensure isLooping is present in error case
       errorMessage: typeof e === 'string' ? e : e.message || 'Unknown error loading details',
       viewerCount: 0,
       categoryName: 'N/A',

@@ -514,12 +514,12 @@
     position: relative;
     overflow: hidden; /* Important for rounded corners with backdrop-filter */
     
-    /* Night mode default background - Glassmorphism RE-APPLIED */
-    background: var(--streamer-item-bg-dark-glass, rgba(53, 51, 64, 0.6)); 
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px); /* Safari */
+    /* Night mode default background */
+    background: #252730; 
+    /* backdrop-filter: blur(12px); removed as background is opaque */
+    /* -webkit-backdrop-filter: blur(12px); removed as background is opaque */
     color: var(--text-primary-dark, #e0e0e0);
-    border: 1px solid var(--streamer-item-border-dark-glass, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--streamer-item-border-dark-glass, rgba(255, 255, 255, 0.1)); 
     box-shadow: var(--streamer-item-shadow-dark, 0 2px 5px rgba(0,0,0,0.2)); 
   }
   

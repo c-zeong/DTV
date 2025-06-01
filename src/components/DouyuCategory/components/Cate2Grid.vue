@@ -315,7 +315,7 @@ const formatCategoryName = (name: string) => {
   gap: 8px; 
 
   /* Night mode default */
-  background: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
+  background: var(--cate2-card-bg-dark, #252731);
   border: 1px solid var(--cate2-card-border-dark, transparent); 
   color: var(--cate2-card-text-dark, #ccc); 
 }
@@ -346,20 +346,20 @@ const formatCategoryName = (name: string) => {
 
 /* Night Mode Active - Revived Glow Style */
 .cate2-card.active { 
-  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); /* Same as unselected night card */
-  border: 1px solid var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); /* Cyan glow border */
-  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); /* Cyan glow */
+  background-color: var(--cate2-card-bg-dark, #252731); 
+  border: 1px solid transparent; /* Removed border for active state */
+  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); /* Restored cyan glow */
 }
 
 :root[data-theme="dark"] .cate2-card.active {
-  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); /* Same as unselected night card */
-  border-color: var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); /* Cyan glow border */
-  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); /* Cyan glow */
+  background-color: var(--cate2-card-bg-dark, #252731); 
+  border-color: transparent; /* Removed border for active state */
+  box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3)); /* Restored cyan glow */
 }
 
 /* Text color for name inside active card in dark mode - Revived Glow Style */
 :root[data-theme="dark"] .cate2-card.active .cate2-name { 
-  color: var(--douyu-cate2-active-text-dark-glow-revived, rgb(79, 209, 197)); /* Cyan glow text */
+  color: var(--douyu-cate2-active-text-dark-glow-revived, rgb(79, 209, 197)); /* Restored cyan glow text */
 }
 
 /* Icon color for ACTIVE DARK mode - ensure original icon visible */
@@ -369,7 +369,7 @@ const formatCategoryName = (name: string) => {
 
 /* Night Mode: Hover on ACTIVE card - Intensified Glow */
 :root[data-theme="dark"] .cate2-card.active:hover {
-  background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); /* Keep unselected bg */
+  background-color: var(--cate2-card-bg-dark, #252731); /* MODIFIED - Keep unselected bg */
   border-color: var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197)); /* Keep cyan border */
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived-hover, 0 0 0 2.5px rgba(79, 209, 197, 0.55), 0 0 12px rgba(79, 209, 197, 0.4)); /* Intensified cyan glow */
   /* Text and icon color inherited from .active night mode style */

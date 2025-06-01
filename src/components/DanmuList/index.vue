@@ -166,7 +166,7 @@
     flex-direction: column;
     position: relative;
     height: 100%;
-    width: 250px; /* 减小宽度，从280px改为250px */
+    width: 220px; /* MODIFIED - 减小宽度，从250px改为220px */
     background-color: var(--secondary-bg, #2c2c2e);
     color: var(--primary-text, #e0e0e0);
     border-radius: 8px;

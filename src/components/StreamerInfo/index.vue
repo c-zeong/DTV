@@ -270,6 +270,10 @@
     background: linear-gradient(135deg, #5352ed, #6c6bff);
   }
   
+  .status-tag.looping { /* New style for looping status */
+    background: linear-gradient(135deg, #7879f1, #8a8bf8); /* Similar to replay or choose a new one */
+  }
+  
   .status-tag.offline {
     background: rgba(255, 255, 255, 0.1);
   }
@@ -295,11 +299,6 @@
     0% { text-shadow: 0 0 2px rgba(251, 114, 153, 0); }
     50% { text-shadow: 0 0 6px rgba(251, 114, 153, 0.7); }
     100% { text-shadow: 0 0 2px rgba(251, 114, 153, 0); }
-  }
-
-  /* Day Mode Styles */
-  :root[data-theme="light"] .streamer-info {
-    /* No specific background needed for the root if parent provides it */
   }
 
   :root[data-theme="light"] .avatar-wrapper {
@@ -357,6 +356,10 @@
     background: linear-gradient(135deg, var(--status-replay-bg-start-light, #007bff), var(--status-replay-bg-end-light, #0056b3)); /* Blue gradient for replay */
   }
 
+  :root[data-theme="light"] .status-tag.looping { /* New style for looping status */
+    background: linear-gradient(135deg, var(--status-looping-bg-start-light, #007bff), var(--status-looping-bg-end-light, #0056b3)); /* Blue gradient for looping */
+  }
+
   :root[data-theme="light"] .status-tag.offline {
     background: var(--status-offline-bg-light, #6c757d); /* Gray for offline */
     color: var(--status-offline-text-light, #ffffff);
@@ -406,30 +409,34 @@
   const computedNickname = computed(() => roomDetails.value?.nickname ?? props.anchorName ?? '主播昵称加载中...')
   const avatarUrl = ref(props.avatar || '')
   const computedViewerCount = computed(() => roomDetails.value?.viewerCount ?? 0)
-  const computedIsLive = computed(() => {
-    // If internal roomDetails are available and have an isLive status, use that first.
-    if (roomDetails.value && roomDetails.value.isLive !== undefined && roomDetails.value.isLive !== null) {
-      return roomDetails.value.isLive;
-    }
-    // Otherwise, fallback to the prop if it's defined.
-    if (props.isLive !== undefined && props.isLive !== null) {
-      return props.isLive;
-    }
-    // Default fallback
-    return false;
-  })
-  
   const isFollowing = computed(() => props.isFollowed)
-  
+  const computedStreamStatus = computed(() => {
+    if (roomDetails.value) {
+      if (roomDetails.value.isLive && roomDetails.value.isLooping) {
+        return 'looping';
+      }
+      if (roomDetails.value.isLive) {
+        return 'live';
+      }
+    } else if (props.isLive) { 
+      // This part might need adjustment if props can also indicate looping
+      // For now, if props.isLive is true, and we don't have loop info from props, assume 'live'
+      // Consider if props should also have an isLooping field if direct prop data is primary
+      return 'live'; // Fallback for initial props or Douyin where roomDetails might not be fetched by this component
+    }
+    return 'offline';
+  });
+
   const statusClass = computed(() => {
-    if (computedIsLive.value) return 'live'
-    return 'offline'
+    return computedStreamStatus.value;
   })
   
   const getStatusText = computed(() => {
-    if (error.value) return '信息加载失败'
-    if (computedIsLive.value) return '直播中'
-    return '未开播'
+    if (error.value) return '信息加载失败';
+    const status = computedStreamStatus.value;
+    if (status === 'live') return '直播中';
+    if (status === 'looping') return '轮播中';
+    return '未开播';
   })
   
   const formattedViewerCount = computed(() => {

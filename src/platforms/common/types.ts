@@ -53,6 +53,7 @@ export interface StreamerDetails {
   nickname: string;
   avatarUrl: string | null; // Changed to allow null
   isLive: boolean;
+  isLooping?: boolean; // Added for video loop status
   isReplay?: boolean; // Optional, as not all platforms might explicitly state this
   categoryName?: string;
   viewerCount?: number;

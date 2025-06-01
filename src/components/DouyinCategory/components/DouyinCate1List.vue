@@ -84,7 +84,7 @@ const selectCate1 = (cate1: DouyinCategory1) => {
 /* Styles for .selected item (Douyin uses .selected, Douyu styles used .active) */
 .cate1-item.selected {
   background-color: var(--cate2-card-bg-dark, rgba(31, 31, 35, 1)); 
-  border: 1px solid var(--douyu-cate2-active-border-dark-glow-revived, rgb(79, 209, 197));
+  border: 1px solid transparent; /* Removed border for night mode selected */
   box-shadow: var(--douyu-cate2-active-shadow-dark-glow-revived, 0 0 0 2px rgba(79, 209, 197, 0.45), 0 0 10px rgba(79, 209, 197, 0.3));
   color: var(--douyu-cate2-active-text-dark-glow-revived, rgb(79, 209, 197));
   font-weight: 500;
