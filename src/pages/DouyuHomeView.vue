@@ -182,4 +182,18 @@ onMounted(() => {
   color: #aaa;
   font-size: 16px;
 }
+
+/* Day Mode Styles */
+:root[data-theme="light"] .home-page {
+  background-color: var(--main-bg-light, #f8f9fa); /* Using a very light gray for background */
+}
+
+:root[data-theme="light"] .category-section,
+:root[data-theme="light"] .live-list-section {
+  background-color: var(--main-bg-light, #f8f9fa); /* Match home page background */
+}
+
+:root[data-theme="light"] .loading-message {
+  color: var(--main-text-secondary-light, #555555); /* Darker gray for text in light mode */
+}
 </style>
