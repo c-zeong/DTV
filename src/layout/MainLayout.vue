@@ -54,40 +54,34 @@ const handleStreamerSelect = (streamer: FollowedStreamer) => {
     routeName = 'douyinPlayer';
   } else {
     console.error('Unsupported platform for player:', streamer.platform);
-    return; // Or handle error appropriately
+    return;
   }
 
   router.push({
     name: routeName,
     params: { 
       roomId: streamer.id
-      // platform is now part of the path structure, not a separate param for these routes
     }
   });
 }
 
 const handleFollowStore = (streamer: FollowedStreamer) => {
   followStore.followStreamer(streamer)
-  console.log(`MainLayout: Follow event for ${streamer.nickname} - dispatched to store`)
 }
 
 const handleUnfollowStore = (payload: {platform: Platform, id: string} | string) => {
   if (typeof payload === 'string') {
-    console.warn('MainLayout: Unfollow event with only ID, assuming DOUYU. Please update emitter to send {platform, id}.')
     followStore.unfollowStreamer(Platform.DOUYU, payload)
   } else {
     followStore.unfollowStreamer(payload.platform, payload.id)
   }
-  console.log(`MainLayout: Unfollow event for ${typeof payload === 'string' ? payload : payload.id} - dispatched to store`)
 }
 
 const handleReorderListStore = (reorderedList: FollowedStreamer[]) => {
   followStore.updateOrder(reorderedList)
-  console.log('MainLayout: Reorder list event - dispatched to store')
 }
 
 const handleFullscreenChange = (isFullscreen: boolean) => {
-  console.log('Main layout received fullscreen change:', isFullscreen)
   isPlayerFullscreen.value = isFullscreen
 }
 </script>

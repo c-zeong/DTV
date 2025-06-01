@@ -30,8 +30,7 @@ pub fn parse_chat_message(payload: &[u8], current_room_id: &str) -> Result<Optio
                                           .map(|fcd| fcd.level)
                                           .unwrap_or(0);
                 
-                println!("    【聊天msg】[用户等级: {}][粉丝牌等级: {}]{}: {}", user_level, fans_club_level, user.nick_name, chat_msg.content);
-
+                
                 Ok(Some(DanmakuFrontendPayload {
                     room_id: current_room_id.to_string(), // Populate room_id
                     user: user.nick_name.clone(),
@@ -53,17 +52,12 @@ pub fn parse_chat_message(payload: &[u8], current_room_id: &str) -> Result<Optio
             }
         }
         Err(e) => {
-            eprintln!("    【X】Failed to parse ChatMessage in parser: {}", e);
+            // eprintln!("    【X】Failed to parse ChatMessage in parser: {}", e); // Commented out to suppress error logging as per user request
             Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
         }
     }
 }
 
-// For other message types, we'll return Ok(None) for now, 
-// as the frontend is primarily expecting chat messages.
-// You can expand these later to return DanmakuFrontendPayload if needed.
-
-// Parser for MemberMessage (进场消息)
 // Demo 中此函数返回 Result<(), ...> 并且只打印，这里保持原有返回 Option<DanmakuFrontendPayload> 结构
 // 如果不需要将进场消息发送到前端，可以保持返回 Ok(None)
 #[allow(dead_code)] // ADDED to suppress warning
@@ -78,14 +72,6 @@ pub fn parse_member_message(payload: &[u8], _current_room_id: &str) -> Result<Op
                                           .unwrap_or(0);
 
                 println!("    【进场msg】[用户等级: {}][粉丝牌等级: {}]{} 进入了直播间", user_level, fans_club_level, user.nick_name);
-                // 如果需要将进场消息发送到前端，构造 DanmakuFrontendPayload
-                // Ok(Some(DanmakuFrontendPayload {
-                //     user: user.nick_name.clone(),
-                //     content: "进入了直播间".to_string(),
-                //     user_level,
-                //     fans_club_level,
-                //     // r#type: "enter".to_string(),
-                // }))
                 Ok(None) // 当前不发送到前端
             } else {
                 println!("    【进场msg】MemberMessage without user details.");
@@ -106,9 +92,6 @@ pub fn parse_like_message(payload: &[u8], _current_room_id: &str) -> Result<Opti
     match LikeMessage::decode(payload) {
         Ok(like_msg) => {
             if let Some(user) = like_msg.user {
-                // 点赞消息通常不直接显示用户等级和粉丝牌，但可以获取
-                // let user_level = user.pay_grade.as_ref().map(|pg| pg.level).unwrap_or(0);
-                // let fans_club_level = user.fans_club.as_ref().and_then(|fc| fc.data.as_ref()).map(|fcd| fcd.level).unwrap_or(0);
                 println!("    【点赞msg】{} 点了{}个赞", user.nick_name, like_msg.count);
             } else {
                 println!("    【点赞msg】点赞 {} 个 (无用户信息)", like_msg.count);
@@ -122,15 +105,10 @@ pub fn parse_like_message(payload: &[u8], _current_room_id: &str) -> Result<Opti
     }
 }
 
-// Parser for RoomStatsMessage (直播间统计信息，例如在线人数、总点赞数等)
-// Demo 中此函数返回 Result<(), ...> 并且只打印
 #[allow(dead_code)] // ADDED to suppress warning
 pub fn parse_room_stats_message(payload: &[u8], _current_room_id: &str) -> Result<Option<DanmakuFrontendPayload>, Box<dyn std::error::Error + Send + Sync>> {
     match RoomStatsMessage::decode(payload) {
         Ok(stats_msg) => {
-            // stats_msg 结构根据你的 douyin.proto 定义
-            // 例如: println!("    【直播间统计msg】在线: {}, 总点赞: {}", stats_msg.online_users, stats_msg.total_likes);
-            // 这里使用 demo 中的 display_long (假设你的 proto 里有这个字段)
             println!("    【直播间统计msg】{}", stats_msg.display_long); 
             Ok(None) // 统计信息通常不作为普通弹幕显示
         }

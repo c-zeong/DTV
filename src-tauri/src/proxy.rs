@@ -28,8 +28,6 @@ async fn flv_proxy_handler(
         return HttpResponse::NotFound().body("Stream URL is not set or empty.");
     }
 
-    println!("[Rust/proxy.rs handler] Attempting to proxy FLV stream from (using reqwest): {}", url);
-
     match client.get(&url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .send()
@@ -37,23 +35,10 @@ async fn flv_proxy_handler(
     {
         Ok(upstream_response) => {
             if upstream_response.status().is_success() {
-                println!(
-                    "[Rust/proxy.rs handler] Successfully connected to upstream with reqwest. Status: {}. Streaming...",
-                    upstream_response.status()
-                );
-
                 let mut response_builder = HttpResponse::Ok();
                 response_builder.content_type("video/x-flv");
 
-                // Forward relevant headers from upstream_response if necessary
-                // For example, some Douyu streams might send Content-Length,
-                // but for live streams, it's often chunked.
-                // if let Some(content_length) = upstream_response.headers().get(reqwest::header::CONTENT_LENGTH) {
-                //    response_builder.insert_header((actix_web::http::header::CONTENT_LENGTH, content_length.as_bytes()));
-                // }
-                // response_builder.no_chunking(true); // Experiment if needed
-
-                // Convert reqwest's byte stream to a type Actix can stream
+                
                 let byte_stream = upstream_response.bytes_stream().map_err(|e| {
                     eprintln!("[Rust/proxy.rs handler] Error reading bytes from upstream: {}", e);
                     actix_web::error::ErrorInternalServerError(format!("Upstream stream error: {}", e))
@@ -122,11 +107,8 @@ pub async fn start_proxy(
         server_handle_state.0.lock().unwrap().take()
     };
     if let Some(existing_handle) = existing_handle_to_stop {
-        println!("[Rust/proxy.rs] Found existing proxy server handle in start_proxy, stopping it first.");
         existing_handle.stop(false).await; 
     }
-
-    println!("[Rust/proxy.rs] Starting proxy server for URL: {} on port {}", current_stream_url, port);
 
     let server = match HttpServer::new(move || {
         let app_data_stream_url = stream_url_data_for_actix.clone();
@@ -153,7 +135,6 @@ pub async fn start_proxy(
 
     // Use tauri::async_runtime::spawn directly
     tauri::async_runtime::spawn(async move {
-        println!("[Rust/proxy.rs] Proxy server task started on port {}.", port);
         if let Err(e) = server.await {
             eprintln!("[Rust/proxy.rs] Proxy server run error: {}", e);
         } else {
@@ -162,7 +143,6 @@ pub async fn start_proxy(
     });
     
     let proxy_url = format!("http://127.0.0.1:{}/live.flv", port);
-    println!("[Rust/proxy.rs] Proxy server should be accessible at {}", proxy_url);
     Ok(proxy_url)
 }
 
@@ -176,9 +156,8 @@ pub async fn stop_proxy(
     }; 
 
     if let Some(handle) = handle_to_stop {
-        println!("[Rust/proxy.rs] Attempting to stop proxy server via command...");
-        handle.stop(true).await; 
-        println!("[Rust/proxy.rs] Proxy server stop command executed.");
+        handle.stop(false).await; // Changed to non-graceful shutdown
+        println!("[Rust/proxy.rs] stop_proxy: Initiated non-graceful shutdown.");
     } else {
         println!("[Rust/proxy.rs] stop_proxy command: No proxy server was running or handle already taken.");
     }

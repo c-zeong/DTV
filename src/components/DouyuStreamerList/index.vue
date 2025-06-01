@@ -79,7 +79,6 @@ const setupIntersectionObserver = () => {
   observer = new IntersectionObserver((entries) => {
     const entry = entries[0];
     if (entry.isIntersecting && hasMore.value && !isLoading.value) {
-      console.log('[LiveList InfiniteScroll] Sentinel intersecting, loading next page.');
       if (props.categoryType && props.categoryId) {
         loadNextPage(props.categoryType, props.categoryId);
       }
@@ -95,7 +94,6 @@ const setupIntersectionObserver = () => {
 
 
 onMounted(() => {
-  console.log('[LiveList] Mounted with props:', props.categoryType, props.categoryId);
   nextTick(() => {
       setupIntersectionObserver();
   });
@@ -107,10 +105,8 @@ onBeforeUnmount(() => {
   }
 });
 
-watch(() => ({ type: props.categoryType, id: props.categoryId }), (newCategory, oldCategory) => {
-  console.log(`[LiveList] Category props changed from ${oldCategory?.type}/${oldCategory?.id} to ${newCategory.type}/${newCategory.id}`);
-  if (newCategory.type && newCategory.id) {
-    console.log('[LiveList] Calling resetAndFetch for new category.');
+watch(() => ({ type: props.categoryType, id: props.categoryId }), (newCategory, _oldCategory) => {
+  if (newCategory && newCategory.id) {
     resetAndFetch(newCategory.type, newCategory.id);
   } else {
     streamers.value = []; 
@@ -119,7 +115,6 @@ watch(() => ({ type: props.categoryType, id: props.categoryId }), (newCategory, 
   nextTick(() => {
       if(sentinelRef.value && observer) {
       } else if (scrollComponentRef.value && sentinelRef.value) {
-          console.log('[LiveList] Re-attempting observer setup after category change.');
           setupIntersectionObserver();
       }
   });

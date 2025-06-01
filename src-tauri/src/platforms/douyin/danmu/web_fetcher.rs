@@ -61,7 +61,7 @@ impl DouyinLiveWebFetcher {
 
         if let Some(ttwid) = ttwid_val {
             self.ttwid = Some(ttwid.clone());
-            println!("Fetched ttwid: {}", ttwid);
+            // println!("Fetched ttwid: {}", ttwid);
             Ok(ttwid)
         } else {
             Err("ttwid not found in cookies".into())

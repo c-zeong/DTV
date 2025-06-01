@@ -289,9 +289,6 @@
 
         if (hasChanged) {
           emit('reorderList', sortedUpdates); 
-          console.log('[FollowsList] Data changed, emitted reorderList with sorted updates.');
-        } else {
-          console.log('[FollowsList] Data fetched, but no changes detected after sorting that would alter current list.');
         }
       }
     } finally {

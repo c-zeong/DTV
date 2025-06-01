@@ -162,7 +162,6 @@
     width: var(--highlight-width);
   }
   
-  /* .id-follow-container.highlight-moves-to-id::before logic will be handled by JS updating CSS vars */
   
   .streamer-id,
   .follow-btn {
@@ -448,22 +447,13 @@
   })
   
   const fetchRoomDetails = async () => {
-    // For Douyin, we expect parent components like DouyinPlayerView to provide all necessary details via props.
-    // So, StreamerInfo should not fetch them again for Douyin platform.
     if (props.platform === Platform.DOUYIN) {
-      console.log('[StreamerInfo] Platform is Douyin. Skipping fetch, relying on props for details.');
-      // Ensure avatar fallback logic is re-evaluated based on current props
       showAvatarText.value = !props.avatar;
-      // Ensure isLoading is false if we skip fetching
       isLoading.value = false;
-      // If roomDetails was populated by a previous fetch (e.g. different room/platform), clear it 
-      // so computed properties correctly fall back to current props.
       roomDetails.value = null;
-      return; // Explicitly return to prevent further execution for Douyin
+      return;
     }
 
-    // Original fetching logic for other platforms (e.g., Douyu)
-    console.log(`[StreamerInfo] Fetching details for ${props.platform}/${props.roomId}`);
     isLoading.value = true;
     error.value = null;
     roomDetails.value = null; // Clear previous details
@@ -542,7 +532,6 @@
   
   watch(() => [props.roomId, props.platform], (newValues, oldValues) => {
     if (newValues[0] !== oldValues[0] || newValues[1] !== oldValues[1]) {
-      console.log('[StreamerInfo] Props (roomId or platform) changed, re-fetching details.')
       fetchRoomDetails()
     }
   }, { deep: true })
@@ -551,7 +540,6 @@
     if (props.platform === Platform.DOUYIN) {
       const hasChanged = newValues.some((val, index) => val !== oldValues[index])
       if (hasChanged) {
-        console.log('[StreamerInfo] Douyin props (title, anchorName, or avatar) changed, re-evaluating Douyin details.')
         roomDetails.value = await getDouyinStreamerDetails({
           roomId: props.roomId,
           initialTitle: props.title,
@@ -573,7 +561,6 @@
     if (newAvatar !== oldAvatar) {
       showAvatarText.value = false; // Reset error state if avatar URL changes
     }
-    // Ensure that if a valid avatar URL comes through, the fallback is hidden.
     if (newAvatar && showAvatarText.value) {
       showAvatarText.value = false;
     }
@@ -584,10 +571,5 @@
       updateHighlightVars();
     });
   })
-
-  // const roomUrl = computed(() => {
-  //   if (!props.streamer || !props.streamer.id) return '#';
-  //   return getStreamerRoomUrl(props.streamer.platform, props.streamer.id);
-  // });
 
   </script>

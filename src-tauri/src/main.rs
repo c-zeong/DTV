@@ -67,37 +67,24 @@ async fn start_danmaku_listener(
 ) -> Result<(), String> {
     // If a listener for this room_id already exists, stop it first.
     if let Some(existing_sender) = danmaku_handles.0.lock().unwrap().remove(&room_id) {
-        let _ = existing_sender.send(()); // Signal the existing listener to stop
-        // log::info!("[Rust Main] Sent stop signal to existing Douyu danmaku listener for room {}", room_id);
-        eprintln!("[Rust Main] Sent stop signal to existing Douyu danmaku listener for room {}", room_id);
+        let _ = existing_sender.send(());
     }
 
     let (stop_tx, stop_rx) = oneshot::channel();
     danmaku_handles.0.lock().unwrap().insert(room_id.clone(), stop_tx);
-    // log::info!("[Rust Main] Stored new stop sender for Douyu danmaku listener for room {}", room_id);
-    eprintln!("[Rust Main] Stored new stop sender for Douyu danmaku listener for room {}", room_id);
 
     let window_clone = window.clone();
     let room_id_clone = room_id.clone();
     tokio::spawn(async move {
-        // log::info!("[Rust Main] Spawning new Douyu danmaku listener for room {}", room_id_clone);
-        eprintln!("[Rust Main] Spawning new Douyu danmaku listener for room {}", room_id_clone);
         let mut client = platforms::douyu::danmu_start::DanmakuClient::new(
             &room_id_clone,
             window_clone,
             stop_rx, // Pass the receiver part of the oneshot channel
         );
         if let Err(e) = client.start().await {
-            // log::error!("[Rust Main] Douyu danmaku client for room {} failed: {}", room_id_clone, e);
             eprintln!("[Rust Main] Douyu danmaku client for room {} failed: {}", room_id_clone, e);
-        } else {
-            // log::info!("[Rust Main] Douyu danmaku client for room {} finished.", room_id_clone);
-            eprintln!("[Rust Main] Douyu danmaku client for room {} finished.", room_id_clone);
         }
-        // Remove the sender from the map once the task is done
-        // danmaku_handles.0.lock().unwrap().remove(&room_id_clone); // This line causes a borrow checker error, remove for now
-        // log::info!("[Rust Main] Removed stop sender for Douyu danmaku listener for room {}", room_id_clone);
-        eprintln!("[Rust Main] Cleaned up Douyu danmaku listener for room {}", room_id_clone);
+        
     });
 
     Ok(())
@@ -112,20 +99,13 @@ async fn stop_danmaku_listener(
     if let Some(sender) = danmaku_handles.0.lock().unwrap().remove(&room_id) {
         match sender.send(()) {
             Ok(_) => {
-                // log::info!("[Rust Main] Successfully sent stop signal to Douyu danmaku listener for room {}", room_id);
-                eprintln!("[Rust Main] Successfully sent stop signal to Douyu danmaku listener for room {}", room_id);
                 Ok(())
             }
             Err(_) => {
-                // log::error!("[Rust Main] Failed to send stop signal to Douyu danmaku listener for room {}: receiver dropped.", room_id);
-                eprintln!("[Rust Main] Failed to send stop signal to Douyu danmaku listener for room {}: receiver dropped.", room_id);
                 Err(format!("Failed to stop Douyu danmaku listener for room {}: receiver dropped.", room_id))
             }
         }
     } else {
-        // log::warn!("[Rust Main] No active Douyu danmaku listener found for room {} to stop.", room_id);
-        eprintln!("[Rust Main] No active Douyu danmaku listener found for room {} to stop.", room_id);
-        // It's not an error if there's nothing to stop; could be a cleanup call.
         Ok(())
     }
 }

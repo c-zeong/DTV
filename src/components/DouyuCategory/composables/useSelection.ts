@@ -8,9 +8,7 @@ export function useSelection(emit: (event: 'category-selected', ...args: any[]) 
   const selectedCate2 = ref<Category2 | null>(null)
 
   const selectCate1 = (cate1Id: number) => {
-    console.log('选择一级分类:', cate1Id)
     if (selectedCate1Id.value === cate1Id) {
-      console.log('已经选择了该一级分类，不重复操作')
       return
     }
     
@@ -21,9 +19,7 @@ export function useSelection(emit: (event: 'category-selected', ...args: any[]) 
   }
 
   const handleCate2Click = (cate2: Category2) => {
-    console.log('选择二级分类:', cate2)
     if (selectedCate2Id.value === cate2.cate2Id) {
-      console.log('已经选择了该二级分类，不重复操作')
       return
     }
     
@@ -48,7 +44,6 @@ export function useSelection(emit: (event: 'category-selected', ...args: any[]) 
     // "全部"选项特殊处理
     if (cate3.id === 'all') {
       if (selectedCate3Id.value === null) {
-        console.log('已经选择了全部，不重复操作')
         return
       }
       selectedCate3Id.value = null
@@ -62,7 +57,6 @@ export function useSelection(emit: (event: 'category-selected', ...args: any[]) 
     }
     
     if (selectedCate3Id.value === cate3.id) {
-      console.log('已经选择了该三级分类，不重复操作')
       return
     }
     

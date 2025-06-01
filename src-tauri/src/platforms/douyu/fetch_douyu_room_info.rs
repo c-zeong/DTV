@@ -46,12 +46,6 @@ pub async fn fetch_douyu_room_info(room_id: String) -> Result<DouyuFollowInfo, S
         Ok(val) => val,
         Err(e) => return Err(format!("Failed to parse JSON for room {}: {}. Ensure API returns valid JSON.", room_id, e.to_string())),
     };
-
-    println!("[fetch_douyu_room_info] For room_id: {}. Full JSON from API: {:?}", room_id, full_json_value);
-
-    // Try to find the actual room data block. Douyu's betard API can be inconsistent.
-    // Common paths: data.room (from some PC API observations), data (if /betard/ is like a generic room info endpoint)
-    // or the root object itself if it's a direct room object (less common for /betard/ but possible).
     let room_data_ref = full_json_value.get("data").and_then(|d| d.get("room")) // Path 1: { data: { room: { ... } } }
         .or_else(|| full_json_value.get("data")) // Path 2: { data: { ...room_info... } }
         .or_else(|| full_json_value.get("room")) // Path 3: { room: { ... } }
@@ -87,8 +81,6 @@ pub async fn fetch_douyu_room_info(room_id: String) -> Result<DouyuFollowInfo, S
         video_loop: get_i64(room_data, "videoLoop"),
         show_status: get_i64(room_data, "show_status"),
     };
-    
-    println!("[fetch_douyu_room_info] For room_id: {}. Extracted info: {:?}", room_id, info);
 
     Ok(info)
 } 

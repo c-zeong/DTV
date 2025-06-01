@@ -101,7 +101,6 @@ pub async fn fetch_live_list(offset: u32, cate2: String, limit: u32) -> Frontend
         "https://m.douyu.com/hgapi/live/cate/newRecList?offset={}&cate2={}&limit={}",
         offset, cate2, limit
     );
-    println!("[Backend fetch_live_list] Fetching URL: {}", url);
 
     let client = reqwest::Client::new();
     let response_result = client
@@ -148,17 +147,12 @@ pub async fn fetch_live_list(offset: u32, cate2: String, limit: u32) -> Frontend
         }
     };
     
-    // println!("[Backend fetch_live_list] Raw Douyu Mobile Response: {}", text); // Keep for debugging if needed
 
     match serde_json::from_str::<NewRecListApiResponse>(&text) { // Use new API response struct
         Ok(douyu_response) => {
             if douyu_response.error == 0 {
                 if let Some(douyu_data) = douyu_response.data {
                     let streamers_transformed: Vec<FrontendStreamer> = douyu_data.list.into_iter().map(|s_raw| {
-                        // Here we can choose which image to use. For now, stick to room_src.
-                        // let cover_url = s_raw.rs_ext.as_ref()
-                        //     .and_then(|exts| exts.iter().find(|ext| ext.image_type == "image/avif" || ext.image_type == "image/webp"))
-                        //     .map_or(&s_raw.room_src, |ext| &ext.rs16);
 
                         FrontendStreamer {
                             rid: s_raw.rid.to_string(),
@@ -263,8 +257,6 @@ pub async fn fetch_live_list_for_cate3(cate3_id: String, page: u32, limit: u32) 
             };
         }
     };
-
-    // println!("[Backend fetch_live_list_for_cate3] Raw Douyu V1 API Response: {}", text);
 
     match serde_json::from_str::<DouyuV1ApiResponse>(&text) {
         Ok(douyu_response) => {

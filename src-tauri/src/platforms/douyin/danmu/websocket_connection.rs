@@ -54,15 +54,13 @@ pub async fn connect_and_manage_websocket(
         signature
     );
 
-    println!("Connecting to WSS: {}", final_wss_url_str);
+    
     let mut client_request = final_wss_url_str.into_client_request()?;
     let headers = client_request.headers_mut();
     headers.insert("User-Agent", fetcher.user_agent.parse()?);
     headers.insert("Cookie", ws_cookie_header.parse()?);
 
-    let (ws_stream, response) = connect_async(client_request).await?;
-    println!("【√】WebSocket连接成功.");
-    println!("WebSocket Response: {:?}", response);
+    let (ws_stream, _response) = connect_async(client_request).await?;
 
     let (mut write, read) = ws_stream.split(); // read will be returned
 

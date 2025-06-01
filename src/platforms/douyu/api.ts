@@ -1,18 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { DouyuRoomInfo, DouyuRawCategoriesResponseData } from './types';
-// import type { StreamerDetails } from '../common/types'; // No longer needed here
 
-/**
- * Fetches room information for a given Douyu room ID.
- */
 export async function fetchDouyuRoomInfo(roomId: string): Promise<DouyuRoomInfo> {
   if (!roomId) {
     console.warn('fetchDouyuRoomInfo: roomId is not provided.');
     return Promise.reject('Room ID is required.');
   }
   try {
-    // Rust command fetch_douyu_room_info returns serde_json::Value
-    // which will be an object if the API call was successful.
     const response = await invoke<any>('fetch_douyu_room_info', { roomId });
 
     if (response && typeof response === 'object') {
@@ -68,9 +62,6 @@ export async function fetchDouyuRoomInfo(roomId: string): Promise<DouyuRoomInfo>
   }
 }
 
-/**
- * Starts the Danmaku listener for a given Douyu room ID.
- */
 export async function startDouyuDanmakuListener(roomId: string): Promise<void> {
   if (!roomId) {
     console.warn('startDouyuDanmakuListener: roomId is not provided.');
@@ -78,16 +69,13 @@ export async function startDouyuDanmakuListener(roomId: string): Promise<void> {
   }
   try {
     await invoke<void>('start_danmaku_listener', { roomId });
-    console.log(`[Douyu API] Danmaku listener started for room ${roomId}`);
   } catch (error) {
     console.error(`Error starting Douyu danmaku listener for ${roomId}:`, error);
     throw error; // Re-throw to be handled by the caller
   }
 }
 
-/**
- * Fetches the raw stream URL for a given Douyu room ID from the backend.
- */
+
 export async function fetchDouyuStreamUrlRaw(roomId: string): Promise<string> {
   if (!roomId) {
     console.warn('[Douyu API] fetchDouyuStreamUrlRaw: roomId is not provided.');
@@ -100,7 +88,6 @@ export async function fetchDouyuStreamUrlRaw(roomId: string): Promise<string> {
       console.error(`[Douyu API] fetchDouyuStreamUrlRaw: Received empty URL for room ${roomId}`);
       return Promise.reject('Empty stream URL received');
     }
-    console.log(`[Douyu API] Raw stream URL for room ${roomId}: ${url}`);
     return url;
   } catch (error) {
     console.error(`[Douyu API] Error fetching Douyu stream URL for ${roomId}:`, error);
@@ -113,27 +100,14 @@ export async function fetchDouyuStreamUrlRaw(roomId: string): Promise<string> {
  */
 export async function fetchDouyuCategoriesRaw(): Promise<DouyuRawCategoriesResponseData> {
   try {
-    // The backend command `fetch_douyu_categories_cmd` should return DouyuCategoriesData (Rust struct)
-    // which corresponds to DouyuRawCategoriesResponseData (TypeScript type) if parsing is correct.
-    // If the command returns the full DouyuBaseResponse<DouyuCategoriesData>, then typing needs adjustment here.
-    // For now, assuming it returns the inner DouyuCategoriesData.
     const rawData = await invoke<DouyuRawCategoriesResponseData>('fetch_douyu_categories_cmd');
-    // Perform a basic check, actual Douyu APIs often wrap in { error: 0, data: ... }
-    // The Rust command is expected to handle this and return the data part or an error string.
-    // If rawData comes directly as an error string from Rust, this won't be an object.
     if (typeof rawData !== 'object' || rawData === null) {
         console.error('[Douyu API] fetchDouyuCategoriesRaw: Received non-object data:', rawData);
         throw new Error('Invalid category data received from backend');
     }
-    // Assuming DouyuCategoriesData maps directly to what we need or is { category_groups: [...] }
-    // If the API returns something like { error: 0, data: { category_groups: [...] } } 
-    // and the Rust command returns this entire structure, then access rawData.data.category_groups
-    console.log('[Douyu API] Raw categories data:', rawData);
     return rawData; // This should be DouyuRawCategoriesResponseData (containing category_groups)
   } catch (error) {
     console.error('[Douyu API] Error fetching Douyu categories raw:', error);
-    // If error is already a string from Rust command, rethrow it.
-    // Otherwise, create a new error or rethrow the caught error.
     if (typeof error === 'string') {
         throw new Error(error);
     }

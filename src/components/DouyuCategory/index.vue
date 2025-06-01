@@ -21,7 +21,6 @@
         :has-more-rows="hasMoreRows"
         @select="handleCate2SelectAndCollapse"
         @toggle-expand="toggleExpand"
-        @height-changed="handleCate2HeightChanged"
       />
       <Cate3List
         v-if="currentCate3List.length > 0"
@@ -74,7 +73,6 @@ const {
 
 const {
   cate1List,
-  cate2List,
   isLoadingCate3,
   fetchCategories,
   fetchThreeCate,
@@ -98,7 +96,6 @@ const handleCate2SelectAndCollapse = (cate2: Category2) => {
 
 // 监听isExpanded变化
 watch(isExpanded, (newVal) => {
-  console.log('展开状态变化 (CategoryList):', newVal)
   emit('expanded-state-changed', newVal)
 })
 
@@ -109,7 +106,6 @@ onMounted(() => {
   const handleCollapsing = () => console.log('分类区域正在折叠')
   
   const handleExpanded = () => {
-    console.log('分类区域已完全展开')
     nextTick(() => {
       const event = new CustomEvent('category-height-change')
       window.dispatchEvent(event)
@@ -117,7 +113,6 @@ onMounted(() => {
   }
   
   const handleCollapsed = () => {
-    console.log('分类区域已完全折叠')
     nextTick(() => {
       const event = new CustomEvent('category-height-change')
       window.dispatchEvent(event)
@@ -169,7 +164,6 @@ onBeforeUnmount(() => {
 // 监听分类数据变化
 watch(cate1List, (newList) => {
   if (newList.length > 0 && isLoading.value) {
-    console.log('一级分类数据已更新, isLoading is now managed by loadCategories finally block.');
   }
 }, { deep: true })
 
@@ -180,9 +174,7 @@ const loadCategories = async () => {
   resetSelection()
   
   try {
-    console.log('CategoryList: 开始获取分类数据')
     await fetchCategories()
-    console.log('CategoryList: 分类数据获取完成, 一级分类数量:', cate1List.value.length, '二级分类数量:', cate2List.value.length)
     
     // 检查是否成功加载了分类数据
     if (cate1List.value.length === 0) {
@@ -196,7 +188,6 @@ const loadCategories = async () => {
     
     // 如果有一级分类但没有选择，选择第一个
     if (cate1List.value.length > 0 && selectedCate1Id.value === null) {
-      console.log('CategoryList: 自动选择第一个一级分类:', cate1List.value[0].cate1Id)
       await nextTick()
       selectCate1(cate1List.value[0].cate1Id)
     }
@@ -219,11 +210,9 @@ const reloadCategories = () => {
 
 // 当sortedCate2List更新且有内容，但没有选中二级分类时，自动选择第一个
 watch(sortedCate2List, (newList) => {
-  console.log('CategoryList: 排序后的二级分类列表:', newList)
   // 自动选择第一个二级分类（如果有且尚未选择）
   if (newList.length > 0 && selectedCate2Id.value === null) {
     nextTick(() => {
-      console.log('CategoryList: 自动选择第一个二级分类:', newList[0].cate2Id)
       handleCate2SelectAndCollapse(newList[0])
     })
   }
@@ -231,27 +220,26 @@ watch(sortedCate2List, (newList) => {
 
 // 当选中二级分类时，获取对应的三级分类
 watch(selectedCate2Id, (newVal) => {
-  console.log('CategoryList: 选中的二级分类ID变更为:', newVal)
   if (newVal) {
     fetchThreeCate(newVal)
   }
 })
 
-const handleCate2HeightChanged = () => {
-  // This event from Cate2Grid means its internal structure changed.
-  // We don't immediately tell HomeView. We wait for CategoryList's own transition (if any) to finish.
-  // If CategoryList is not animating (e.g. initial load, or Cate2Grid changed height without CategoryList expand/collapse change),
-  // we might need to tell HomeView to update. This is now handled by the transitionend on categoryListRootRef.
-  console.log('Cate2Grid height changed.')
-}
-
 const onCategoryListTransitionEnd = () => {
-  console.log('CategoryList root transitionend.')
   emit('category-section-height-settled')
 }
 
 // 导出一些方法供父组件使用
 defineExpose({
+  cate1List,
+  sortedCate2List,
+  currentCate3List,
+  selectedCate1Id,
+  selectedCate2Id,
+  selectedCate3Id,
+  selectCate1,
+  handleCate2SelectAndCollapse,
+  handleCate3Click,
   toggleExpand,
   isExpanded,
   hasMoreRows,

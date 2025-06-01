@@ -76,7 +76,6 @@ const categorySectionRef = ref<HTMLElement | null>(null)
 const isLoadingDefaultCategory = ref(true);
 
 const handleCategorySelected = (event: CategorySelectedEvent) => {
-  console.log('分类被选择 (HomeView):', event)
   if (event.type === 'cate2' && event.shortName) {
     selectedCategoryInfo.value = {
       type: 'cate2',
@@ -99,13 +98,7 @@ const handleCategorySelected = (event: CategorySelectedEvent) => {
 const fetchDefaultCategory = async () => {
   isLoadingDefaultCategory.value = true;
   try {
-    console.log('HomeView: 开始获取默认分类');
-    // invoke now directly returns an object with cate1List or throws an error
     const response = await invoke('fetch_categories') as FrontendCategoryResponse;
-    console.log('HomeView: Raw fetch_categories response:', response);
-
-    // On success, response directly contains cate1List.
-    // Errors are caught by the catch block.
     if (response && response.cate1List && response.cate1List.length > 0) {
       const firstCate1 = response.cate1List[0];
       if (firstCate1 && firstCate1.cate2List && firstCate1.cate2List.length > 0) {
@@ -116,7 +109,6 @@ const fetchDefaultCategory = async () => {
             id: defaultCate2.short_name,
             name: defaultCate2.name 
           };
-          console.log('HomeView: Default category set to:', selectedCategoryInfo.value);
         } else {
           console.error('HomeView: Default second-level category or its short_name is missing.');
           selectedCategoryInfo.value = null;
@@ -138,7 +130,6 @@ const fetchDefaultCategory = async () => {
 }
 
 onMounted(() => {
-  console.log('HomeView组件已挂载')
   fetchDefaultCategory()
 })
 </script>

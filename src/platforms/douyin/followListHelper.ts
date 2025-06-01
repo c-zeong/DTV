@@ -22,10 +22,6 @@ export async function refreshDouyinFollowedStreamer(
         nickname: data.anchor_name || streamer.nickname, // Map anchor_name to nickname
         roomTitle: data.title || streamer.roomTitle,      // Map title to roomTitle
         avatarUrl: data.avatar || streamer.avatarUrl,    // Map avatar to avatarUrl
-        // The streamer.id is the original ID used for following and should remain consistent.
-        // The 'data' object from get_douyin_live_stream_url might not have a room_id_str that matches the input streamer.id
-        // if the input streamer.id is a custom identifier like a username rather than a numerical room_id.
-        // We assume streamer.id is the correct persistent identifier for the followed item.
       };
     } else {
       if (data && data.error_message) {

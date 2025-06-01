@@ -44,22 +44,19 @@ const handleFollow = () => {
     id: props.roomId,
     platform: Platform.DOUYIN,
   });
-  console.log('[DouyinPlayerView] Follow requested for:', props.roomId);
 };
 
 const handleUnfollow = () => {
   followStore.unfollowStreamer(Platform.DOUYIN, props.roomId);
-  console.log('[DouyinPlayerView] Unfollowed', props.roomId);
 };
 
 const handleClosePlayer = () => {
-  console.log('[DouyinPlayerView] Close player event received. Navigating back.');
-  router.back();
+  console.log('[DouyinPlayerView] Close button clicked. Navigating to Douyin home.');
+  router.replace('/douyin');
 };
 
 const handlePlayerFullscreenChange = (isFullscreen: boolean) => {
   emit('fullscreen-change', isFullscreen);
-  console.log('[DouyinPlayerView] Fullscreen event re-emitted:', isFullscreen);
 };
 
 </script>

@@ -13,8 +13,6 @@ interface LiveStreamInfoFromRust {
 
 interface DouyinStreamerInfoParserProps {
   roomId: string;
-  // These are initial values that might be passed from the view, 
-  // they can be used as fallbacks or placeholders until API data loads.
   initialTitle?: string | null;
   initialAnchorName?: string | null;
   initialAvatar?: string | null;
@@ -23,11 +21,7 @@ interface DouyinStreamerInfoParserProps {
 export async function getDouyinStreamerDetails(
   props: DouyinStreamerInfoParserProps
 ): Promise<StreamerDetails> {
-  console.log(`[StreamerInfo/douyinParser.ts] Fetching Douyin details for room ${props.roomId}`);
-
   try {
-    // The payload for get_douyin_live_stream_url expects { args: { room_id_str: "..." } }
-    // This matches the GetStreamUrlPayload struct in Rust.
     const rustPayload = { args: { room_id_str: props.roomId } };
     const data = await invoke<LiveStreamInfoFromRust>('get_douyin_live_stream_url', { payload: rustPayload });
 
@@ -49,8 +43,7 @@ export async function getDouyinStreamerDetails(
       };
     }
 
-    // Determine liveness based on the status from the API.
-    // According to user feedback, status 2 means live for Douyin.
+
     const isLive = data.status === 2;
 
     return {
@@ -60,8 +53,6 @@ export async function getDouyinStreamerDetails(
       roomTitle: data.title || props.initialTitle || '精彩直播中',
       avatarUrl: data.avatar ?? props.initialAvatar ?? null,
       isLive: isLive,
-      // viewerCount and categoryName are not part of LiveStreamInfoFromRust currently.
-      // If they are needed, the Rust struct and this parser would need to be updated.
       viewerCount: 0,   // Placeholder
       categoryName: 'N/A', // Placeholder
       errorMessage: null, // No error from API

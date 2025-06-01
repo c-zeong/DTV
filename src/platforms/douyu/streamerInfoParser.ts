@@ -1,8 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { StreamerDetails, LiveStatus } from '../common/types'; // Import LiveStatus
 
-// This interface should match the DouyuFollowInfo struct returned by Rust
-// It's the same as in followListHelper.ts, consider moving to a shared Douyu types file if not already.
 interface DouyuRoomInfoFromCommand {
   room_id: string;
   room_name?: string | null;
@@ -10,14 +8,9 @@ interface DouyuRoomInfoFromCommand {
   avatar_url?: string | null;
   video_loop?: number | null;
   show_status?: number | null;
-  // Include other fields if StreamerDetails needs them, e.g. viewer_count, category_name
-  // For now, assuming these are not part of DouyuFollowInfo from Rust.
-  // We might need to add them to DouyuFollowInfo in Rust if they are reliably available
-  // and needed by StreamerDetails without a second API call.
 }
 
 export async function fetchDouyuStreamerDetails(roomId: string): Promise<StreamerDetails> {
-  console.log(`[StreamerInfo/douyuParser.ts] Fetching Douyu details for room ${roomId}`);
   try {
     // Now expects the clean DouyuFollowRoomInfo structure from the Rust command
     const roomData = await invoke<DouyuRoomInfoFromCommand>('fetch_douyu_room_info', { roomId });
@@ -44,11 +37,6 @@ export async function fetchDouyuStreamerDetails(roomId: string): Promise<Streame
       currentLiveStatus = 'OFFLINE'; // Ensure offline if not sStatus === 1
     }
 
-    // Note: The DouyuFollowInfo struct from Rust currently doesn't include viewerCount or categoryName.
-    // If StreamerDetails needs these, fetch_douyu_room_info in Rust must be updated to extract and return them,
-    // or another API call specific to StreamerDetails would be needed.
-    // For now, they will be undefined or default.
-
     return {
       roomId: roomData.room_id, // Use room_id from the fetched data
       platform: 'douyu',
@@ -58,8 +46,6 @@ export async function fetchDouyuStreamerDetails(roomId: string): Promise<Streame
       liveStatus: currentLiveStatus,
       isLive: isActuallyLive, // isLive is true if show_status is 1 (live or looping)
       isLooping: isCurrentlyLooping, // new field for explicit loop status
-      // viewerCount and categoryName would be undefined if not in DouyuRoomInfoFromCommand
-      // and not added to the Rust struct.
       viewerCount: undefined, // Placeholder - needs data source
       categoryName: undefined, // Placeholder - needs data source
     };

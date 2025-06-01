@@ -26,10 +26,8 @@ async fn fetch_initial_cookies(room_url: &str) -> Result<InitialCookies, String>
     }
 
     let mut cookies_found = InitialCookies::default();
-    println!("[Cookies] Received from {}:", DOUYIN_BASE_URL);
+
     for cookie in response.cookies() {
-        println!("  Name: {}, Value: {}, Domain: {:?}, Path: {:?}", 
-            cookie.name(), cookie.value(), cookie.domain(), cookie.path());
         match cookie.name() {
             "ttwid" => cookies_found.ttwid = Some(cookie.value().to_string()),
             "odin_tt" => cookies_found.odin_tt = Some(cookie.value().to_string()),
@@ -40,9 +38,6 @@ async fn fetch_initial_cookies(room_url: &str) -> Result<InitialCookies, String>
     if cookies_found.ttwid.is_none() {
         return Err("ttwid cookie not found in initial response".to_string());
     }
-    // odin_tt might be optional for some initial pages, but crucial for APIs later.
-    // If it's strictly required, you can add: if cookies_found.odin_tt.is_none() { return Err(...) }
-    println!("[Cookies] Extracted: ttwid: {:?}, odin_tt: {:?}", cookies_found.ttwid.is_some(), cookies_found.odin_tt.is_some());
     Ok(cookies_found)
 }
 
@@ -78,8 +73,6 @@ pub async fn setup_douyin_cookies(http_client: &mut HttpClient, room_id: &str) -
     
     let initial_cookies = fetch_initial_cookies(&room_url).await?;
     let ttwid = initial_cookies.ttwid.ok_or_else(|| "ttwid not found after fetch_initial_cookies".to_string())?;
-    // odin_tt is optional from fetch_initial_cookies but if it's None here, the API might fail.
-    // It's better to ensure it's present or handle its absence gracefully if possible.
     let odin_tt_val = initial_cookies.odin_tt.as_deref().unwrap_or_default(); // Use empty if not found, or handle error
 
     // Correctly handle the Result for ac_nonce
@@ -107,18 +100,8 @@ pub async fn setup_douyin_cookies(http_client: &mut HttpClient, room_id: &str) -
     }
     
     let cookie_value = cookie_parts.join("; ");
-    println!("[Cookies] Setting up with: {}", cookie_value);
     
     http_client.insert_header(COOKIE, &cookie_value)?;
-    // Potentially add UPGRADE_INSECURE_REQUESTS = "1" if API requires it, like in demo
-    // http_client.insert_header(reqwest::header::UPGRADE_INSECURE_REQUESTS, "1")?;
 
     Ok(())
 }
-
-// The demo also has a get_ms_token() or similar, often generated client-side with random bytes.
-// For an API-based approach, this might be part of the URL parameters or not needed if cookies are sufficient.
-// The webcast/room/web/enter/ API URL in the demo doesn't show msToken directly, so we'll omit for now.
-// If API calls fail later due to missing msToken, this would be the place to add it.
-// fn get_ms_token() -> String { ... } 
-// fn get_ms_token() -> String { ... } 

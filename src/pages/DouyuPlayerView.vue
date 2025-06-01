@@ -63,7 +63,6 @@ const loadStreamerDetails = async (currentRoomId: string) => {
   }
 
   if (hasLoadedDetailsForCurrentRoom && streamerDetails.value?.roomId === currentRoomId) {
-    console.log(`[DouyuPlayerView] Details already processed for room ${currentRoomId}. Skipping fetch.`);
     if(isLoadingDetails.value) isLoadingDetails.value = false;
     return;
   }
@@ -74,12 +73,8 @@ const loadStreamerDetails = async (currentRoomId: string) => {
       streamerDetails.value = null;
   }
 
-  console.log(`[DouyuPlayerView] Fetching details for room: ${currentRoomId} (Single Attempt)`);
-
   try {
     const result = await fetchDouyuStreamerDetails(currentRoomId);
-    console.log('[DouyuPlayerView] Raw streamer details received:', result);
-
     if (result?.errorMessage) {
       detailsError.value = result.errorMessage;
       streamerDetails.value = null; 
@@ -121,33 +116,28 @@ const handleFollow = (streamerDataFromPlayer: MainPlayerFollowEventData) => {
     roomTitle: streamerDataFromPlayer.roomTitle, 
   };
   followStore.followStreamer(streamerToFollow);
-  console.log('[DouyuPlayerView] Followed', streamerToFollow);
 };
 
 const handleUnfollow = () => {
   followStore.unfollowStreamer(Platform.DOUYU, props.roomId);
-  console.log('[DouyuPlayerView] Unfollowed', props.roomId);
   if (streamerDetails.value) {
   }
 };
 
 const handleClosePlayer = () => {
-  console.log('[DouyuPlayerView] Close player event received. Navigating back.');
-  router.back();
+  console.log('[DouyuPlayerView] Close button clicked. Navigating to Douyu home.');
+  router.replace('/'); // Navigate to Douyu home page
 };
 
 const handlePlayerFullscreenChange = (isFullscreen: boolean) => {
   emit('fullscreen-change', isFullscreen);
-  console.log('[DouyuPlayerView] Fullscreen event re-emitted:', isFullscreen);
 };
 
 const handleRefreshDetails = () => {
   if (props.roomId) {
-    console.log(`[DouyuPlayerView] Received request-refresh-details for room ${props.roomId}. Re-fetching.`);
     hasLoadedDetailsForCurrentRoom = false; // Reset flag to allow re-fetch
     streamerDetails.value = null; // Optionally clear current details to ensure UI updates to loading
     detailsError.value = null;    // Clear previous errors
-    // isLoadingDetails will be set to true inside loadStreamerDetails
     loadStreamerDetails(props.roomId);
   } else {
     console.warn('[DouyuPlayerView] request-refresh-details received but no roomId available.');
@@ -157,12 +147,10 @@ const handleRefreshDetails = () => {
 watch(() => props.roomId, (newRoomId, oldRoomId) => {
   if (newRoomId) {
     if (newRoomId !== oldRoomId) {
-      console.log(`[DouyuPlayerView] Room ID changed from ${oldRoomId} to ${newRoomId}. Initializing load.`);
       hasLoadedDetailsForCurrentRoom = false; // Reset flag for the new room ID
       loadStreamerDetails(newRoomId);
     } else { // roomId is the same, or it's the initial immediate:true call
       if (!hasLoadedDetailsForCurrentRoom) {
-         console.log(`[DouyuPlayerView] Watch (immediate or same ID without load yet): Room ID ${newRoomId}. Attempting load.`);
          loadStreamerDetails(newRoomId);
       }
     }
@@ -175,7 +163,6 @@ watch(() => props.roomId, (newRoomId, oldRoomId) => {
 }, { immediate: true });
 
 onMounted(() => {
-  console.log(`[DouyuPlayerView] Component mounted. Room ID: ${props.roomId}. Watcher handles initial load if ID present and not yet loaded.`);
   if (props.roomId && hasLoadedDetailsForCurrentRoom && isLoadingDetails.value) {
      isLoadingDetails.value = false; 
   } else if (!props.roomId && isLoadingDetails.value) {

@@ -30,7 +30,6 @@ pub async fn get_douyin_live_stream_url(
     payload: crate::platforms::common::GetStreamUrlPayload
 ) -> Result<crate::platforms::common::LiveStreamInfo, String> { 
     let room_id_str = payload.args.room_id_str; 
-    println!("[Douyin Live RS] Received room_id_str via GetStreamUrlPayload: '{}'", room_id_str);
 
     if room_id_str.is_empty() {
         return Ok(crate::platforms::common::LiveStreamInfo {
@@ -52,19 +51,17 @@ pub async fn get_douyin_live_stream_url(
 
     http_client.insert_header(REFERER, DOUYIN_API_REFERER)?;
     
-    println!("[Douyin Live RS] Using room_id_str to build API URL: '{}'", room_id_str);
     let api_url = format!(
         "https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=1920&screen_height=1080&browser_language=zh-CN&browser_platform=MacIntel&browser_name=Chrome&browser_version=116.0.0.0&web_rid={}",
         room_id_str
     );
-    println!("[Douyin Live RS] Constructed API URL: {}", api_url);
 
     let api_response: DouyinApiResponse = match http_client.get_json(&api_url).await {
         Ok(resp) => resp,
         Err(e) => {
             // Log the raw text response on error as well, if possible
-            let raw_error_text = http_client.get_text(&api_url).await.unwrap_or_else(|_| "Failed to get raw error text".to_string());
-            println!("[Douyin Live RS] API request failed. Raw error text (if any): {}", raw_error_text);
+            let _raw_error_text = http_client.get_text(&api_url).await.unwrap_or_else(|_| "Failed to get raw error text".to_string());
+            // println!("[Douyin Live RS] API request failed. Raw error text (if any): {}", raw_error_text);
             return Ok(crate::platforms::common::LiveStreamInfo {
                 title: None, anchor_name: None, avatar: None, stream_url: None, status: None,
                 error_message: Some(format!("API request failed: {}. URL: {}", e, api_url)),
@@ -72,8 +69,8 @@ pub async fn get_douyin_live_stream_url(
         }
     };
 
-    if let Some(data_content) = &api_response.data { 
-        println!("[Douyin Live RS DEBUG] Full api_response.data: {:?}", data_content);
+    if let Some(_data_content) = &api_response.data { 
+        // println!("[Douyin Live RS DEBUG] Full api_response.data: {:?}", data_content);
     } else {
         println!("[Douyin Live RS DEBUG] api_response.data is None");
     }
@@ -100,12 +97,7 @@ pub async fn get_douyin_live_stream_url(
         .ok_or_else(|| "No room data entry (data.data[0]) found in API response".to_string())?;
 
     let current_status = room_data_entry.status;
-
-    // If the streamer is not live (status != 2), we should still return their basic info
-    // but with no stream_url and a relevant message or no error if it's just for info.
-    // For the follows list, we just need the status and basic info.
     if current_status != 2 {
-        println!("[Douyin Live RS INFO] Streamer status is {} (not live). Returning info without stream URL.", current_status);
         return Ok(crate::platforms::common::LiveStreamInfo {
             title: room_data_entry.title.clone(),
             anchor_name: main_data.user.as_ref().and_then(|u| u.nickname.clone()),

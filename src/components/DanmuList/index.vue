@@ -35,18 +35,12 @@
           </div>
         </div>
       </div>
-      <!-- Optional: Danmu input field -->
-      <!-- <div class="danmu-input-area"> ... </div> -->
     </div>
   </template>
   
   <script setup lang="ts">
   import { ref, watch, nextTick } from 'vue';
-  // TODO: Import other platform parsers as needed
-  // import { parseBilibiliDanmakuMessage } from '../../platforms/bilibili/parsers';
-  
-  // Assuming DanmakuMessage from player/index.vue is the structure of messages passed in props
-  // If not, this interface needs to match the actual structure provided by player/index.vue
+
   interface DanmakuUIMessage {
     id?: string;
     nickname: string;
@@ -55,8 +49,8 @@
     badgeName?: string;
     badgeLevel?: string;
     color?: string;
-    isSystem?: boolean; // Flag for system messages
-    type?: string; // Type of system message for styling - changed to string
+    isSystem?: boolean; // 系统消息
+    type?: string;
   }
   
   const props = defineProps<{
@@ -87,75 +81,47 @@
   const handleScroll = () => {
     if (!danmakuListEl.value) return;
     const el = danmakuListEl.value;
-    // Check if the user has scrolled to a point where the bottom of the visible area
-    // is more than, say, 20 pixels away from the actual bottom of the content.
+
     const isScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 20; 
 
     if (isScrolledUp) {
-      // If user has scrolled up significantly, set userScrolled to true
       if (!userScrolled.value) {
         userScrolled.value = true;
-        console.log('[DanmuList] User scrolled up, auto-scroll disabled.');
       }
     } else {
-      // If user is at or very near the bottom, re-enable auto-scroll by setting userScrolled to false
       if (userScrolled.value) {
         userScrolled.value = false;
-        console.log('[DanmuList] User scrolled to bottom, auto-scroll re-enabled.');
       }
     }
   };
   
   const scrollToBottom = () => {
-    console.log('[DanmuList] scrollToBottom called. autoScroll:', autoScroll.value, 'userScrolled:', userScrolled.value);
     nextTick(() => {
       if (danmakuListEl.value && autoScroll.value && !userScrolled.value) {
         const el = danmakuListEl.value;
-        console.log('[DanmuList] scrollToBottom - Attempting to scroll. scrollHeight:', el.scrollHeight, 'current scrollTop:', el.scrollTop);
         el.scrollTop = el.scrollHeight;
-        console.log('[DanmuList] scrollToBottom - scrollTop set to:', el.scrollTop);
       } else {
-        console.log('[DanmuList] scrollToBottom - Conditions not met for scrolling.');
       }
     });
   };
 
   watch(autoScroll, (newValue) => {
-    console.log('[DanmuList] autoScroll changed to:', newValue);
     if (newValue) {
       userScrolled.value = false; 
-      console.log('[DanmuList] autoScroll watcher - userScrolled reset to false');
       scrollToBottom();
     }
   });
   
-  watch(() => props.messages, (newMessages, oldMessages) => {
-    const oldLength = oldMessages ? oldMessages.length : 0;
-    const newLength = newMessages ? newMessages.length : 0;
-    console.log(`[DanmuList] props.messages watcher triggered. New messages count: ${newLength}, Old messages count: ${oldLength}.`);
-    console.log('[DanmuList] New messages content (first 5):', newMessages?.slice(0, 5).map(m => m.content));
-
+  watch(() => props.messages, (newMessages, _oldMessages) => {
     if (newMessages && autoScroll.value && !userScrolled.value) {
-      console.log('[DanmuList] props.messages watcher - Conditions met. Attempting to scroll.');
       scrollToBottom();
-    } else {
-      console.log('[DanmuList] props.messages watcher - Conditions for scroll NOT met. newMessages:', !!newMessages, 'autoScroll:', autoScroll.value, 'userScrolled:', userScrolled.value);
     }
   }, { deep: true });
 
-  watch(() => props.roomId, (newRoomId, oldRoomId) => {
-      console.log(`[DanmuList] props.roomId changed from ${oldRoomId} to ${newRoomId}`);
-      userScrolled.value = false; 
-      autoScroll.value = true; 
-      console.log('[DanmuList] props.roomId watcher - userScrolled set to false, autoScroll set to true');
-      nextTick(() => {
-        if (danmakuListEl.value) {
-          console.log('[DanmuList] props.roomId watcher - Resetting scrollTop to 0 for new room.');
-          danmakuListEl.value.scrollTop = 0; 
-        }
-        // No need to call scrollToBottom() here if list is empty, messages watcher will handle it.
-        // If there are initial messages for the new room, the messages watcher should pick that up.
-      });
+  watch(() => props.roomId, (_newRoomId, _oldRoomId) => {
+    userScrolled.value = false;
+    autoScroll.value = true;
+    // scrollToBottom(); // Optionally scroll to bottom if there are initial messages for the new room
   });
   
   </script>
@@ -166,7 +132,7 @@
     flex-direction: column;
     position: relative;
     height: 100%;
-    width: 220px; /* MODIFIED - 减小宽度，从250px改为220px */
+    width: 220px;
     background-color: var(--secondary-bg, #2c2c2e);
     color: var(--primary-text, #e0e0e0);
     border-radius: 8px;
@@ -205,13 +171,13 @@
   
   .danmu-messages-area {
     position: absolute;
-    top: 40px; /* 头部高度 */
+    top: 40px;
     bottom: 0;
     left: 0;
     right: 0;
-    overflow-y: auto; /* Ensure vertical scrolling is enabled */
-    padding: 8px 12px; /* Add some padding */
-    scroll-behavior: smooth; /* Optional: for smoother programmatic scrolling */
+    overflow-y: auto; 
+    padding: 8px 12px;
+    scroll-behavior: smooth;
   }
   
   .empty-danmu-placeholder {
@@ -270,10 +236,6 @@
     flex-shrink: 0;
   }
   
-  /* .badge-name { */
-    /* Style for badge name if needed */
-  /* } */
-  
   .badge-level {
     margin-left: 4px;
     font-weight: bold;
@@ -305,7 +267,6 @@
     line-height: 1.4;
   }
   
-  /* Custom scrollbar styling (optional, WebKit browsers) */
   .danmu-messages-area::-webkit-scrollbar {
     width: 6px;
   }
@@ -324,7 +285,6 @@
     background-color: var(--primary-accent, #007aff);
   }
   
-  /* Fallback styling for non-WebKit if needed */
   .danmu-messages-area {
     scrollbar-width: thin;
     scrollbar-color: var(--border-color-light, #5a5a5e) var(--tertiary-bg, #3a3a3c);
@@ -345,53 +305,49 @@
   }
   
   .connection-status-placeholder.success {
-    color: #28a745; /* Green for success */
+    color: #28a745;
   }
   
   .connection-status-placeholder .status-icon {
-    width: 32px; /* Increased icon size */
+    width: 32px;
     height: 32px;
     margin-bottom: 8px;
   }
   
   .connection-status-placeholder p {
     margin: 4px 0;
-    font-size: 0.9rem; /* Adjusted font size */
-    font-weight: 500; /* Slightly bolder */
+    font-size: 0.9rem; 
+    font-weight: 500;
   }
   
   .danmu-item.system-message {
     background-color: rgba(40, 167, 69, 0.1);
     border-left: 3px solid #28a745;
-    /* padding: 6px 10px; Inherits .danmu-item padding, can override if needed */
-    margin-top: 4px; /* Add some space if it's the very first item */
+    margin-top: 4px;
     margin-bottom: 8px;
   }
 
   .danmu-item.system-message .danmu-content {
-    /* color: #218838; */ /* System message content color can be default or specific if needed */
-    font-weight: normal; /* System messages might not need to be bold */
-    /* display: flex; */ /* Re-evaluate if icon is part of content span */
-    /* align-items: center; */
+    font-weight: normal;
   }
 
   .danmu-item.system-message.success .danmu-content {
-    color: #218838; /* Specific color for success system messages */
+    color: #218838;
     font-weight: 500;
   }
 
   .inline-icon {
-    width: 1.1em; /* Slightly larger than text */
+    width: 1.1em;
     height: 1.1em;
     margin-right: 8px;
-    vertical-align: -0.15em; /* Adjust vertical alignment */
+    vertical-align: -0.15em;
   }
   
   .success-icon {
     fill: #28a745;
   }
   
-/* Day Mode Styles */
+
 :root[data-theme="light"] .danmu-list-wrapper {
   background-color: var(--primary-bg-light, #ffffff);
   color: var(--primary-text-light, #333333);
@@ -444,20 +400,7 @@
 }
 
 :root[data-theme="light"] .danmu-badge {
-  /* Badge colors often remain vibrant, but text inside might need adjustment if bg is light */
-  /* Assuming badge backgrounds like #FB7299 will have white text, which is fine on light theme */
-   color: #ffffff; /* Ensure text on badge is white */
-}
-
-/* Specific badge like Douyu's default - if its CSS var changes with theme */
-/* :root[data-theme="light"] .danmu-badge.douyu-badge-example {
-  background-color: var(--douyu-badge-bg-light, #SOME_LIGHT_BADGE_COLOR);
-  color: var(--douyu-badge-text-light, #333);
-} */
-
-:root[data-theme="light"] .danmu-user {
-  /* color will be set by the userColor function, which generates light HSL values */
-  /* No specific override needed here unless userColor is not theme-aware */
+   color: #ffffff; 
 }
 
 :root[data-theme="light"] .user-level {
@@ -469,7 +412,7 @@
 }
 
 :root[data-theme="light"] .danmu-item.system-message {
-  background-color: var(--system-message-bg-light, #e6f7ff); /* Light blueish for general system messages */
+  background-color: var(--system-message-bg-light, #e6f7ff);
   border-left-color: var(--system-message-border-light, #91d5ff);
 }
 

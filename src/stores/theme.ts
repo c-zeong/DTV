@@ -4,7 +4,6 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow'; // Changed import
 interface ThemeState {
   userPreference: 'light' | 'dark' | 'system';
   currentSystemTheme: 'light' | 'dark';
-  // effectiveTheme is not stored as state, but applied directly
 }
 
 const STORE_KEY = 'theme_preference';
@@ -23,16 +22,12 @@ export const useThemeStore = defineStore('theme', {
       } else {
         this.userPreference = 'system'; // Default if nothing stored or invalid
       }
-      console.log(`[ThemeStore] Initial userPreference: ${this.userPreference}`);
-
-      // Listen to system theme changes
+      
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       this.currentSystemTheme = mediaQuery.matches ? 'dark' : 'light';
-      console.log(`[ThemeStore] Initial currentSystemTheme: ${this.currentSystemTheme}`);
 
       mediaQuery.addEventListener('change', (e) => {
         this.currentSystemTheme = e.matches ? 'dark' : 'light';
-        console.log(`[ThemeStore] System theme changed to: ${this.currentSystemTheme}`);
         this._applyTheme();
       });
 
@@ -43,7 +38,6 @@ export const useThemeStore = defineStore('theme', {
       if (this.userPreference === preference) return;
       this.userPreference = preference;
       localStorage.setItem(STORE_KEY, preference);
-      console.log(`[ThemeStore] User preference set to: ${this.userPreference}`);
       this._applyTheme();
     },
 
@@ -54,14 +48,11 @@ export const useThemeStore = defineStore('theme', {
       } else {
         themeToApply = this.userPreference;
       }
-
-      console.log(`[ThemeStore] Applying effective theme: ${themeToApply}`);
       document.documentElement.setAttribute('data-theme', themeToApply);
 
       try {
         const win = WebviewWindow.getCurrent(); // Using WebviewWindow.getCurrent()
         await win.setTheme(themeToApply);
-        console.log(`[ThemeStore] Tauri window theme set to: ${themeToApply}`);
       } catch (error) {
         console.error('[ThemeStore] Error setting Tauri window theme:', error);
       }

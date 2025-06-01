@@ -109,13 +109,7 @@ export interface DouyuRoomInfoData {
   cate_name: string;         // Category name
   videoLoop: number | string;  // Indicates if it's a replay/video loop (e.g., 1 for loop, 0 for live)
   room_thumb: string;        // URL to room's thumbnail/cover image
-  // There can be many other fields: start_time, end_time, tags, specific game info, etc.
   ownerDetail?: DouyuRoomInfoOwner; // Nested object with more detailed owner information (in some APIs)
 }
 
-/**
- * The type expected from `invoke('fetch_douyu_room_info')`.
- * This should align with what `fetch_douyu_room_info.rs` (backend) actually prepares and returns.
- * It typically represents the core data about the room after initial API response parsing (e.g., unwrapping from `data` field).
- */
 export type DouyuRoomInfo = DouyuRoomInfoData; 

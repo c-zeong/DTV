@@ -106,8 +106,7 @@ pub async fn fetch_douyin_partition_rooms(
         count, offset, partition, partition_type, ms_token
     );
 
-    println!("Fetching Douyin partition rooms (using local client & hardcoded cookie values for test) from URL: {} with Cookie: {}", url, cookie_string);
-
+    
     let request_builder = local_client.request(reqwest::Method::GET, &url)
         .headers(headers);
 

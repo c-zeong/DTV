@@ -6,8 +6,6 @@ interface CategoryState {
   currentCategoryType: CategoryType | null;
   currentCategoryId: string | null;
   currentCategoryName: string | null;
-  // You might want to store available categories here as well
-  // availableCategories: any[]; 
 }
 
 export const useCategoryStore = defineStore('category', {
@@ -15,7 +13,6 @@ export const useCategoryStore = defineStore('category', {
     currentCategoryType: null,
     currentCategoryId: null,
     currentCategoryName: null,
-    // availableCategories: [],
   }),
   getters: {
     isSelectedCategory: (state: CategoryState): boolean => {
@@ -38,18 +35,12 @@ export const useCategoryStore = defineStore('category', {
       this.currentCategoryType = type;
       this.currentCategoryId = id;
       this.currentCategoryName = name;
-      console.log(`[categoryStore] Category set to Type: ${type}, ID: ${id}, Name: ${name}`);
-      // Optionally, save to localStorage if you want to persist selection
-      // localStorage.setItem('currentCategory', JSON.stringify({ type, id, name }));
     },
     clearCategory() {
       this.currentCategoryType = null;
       this.currentCategoryId = null;
       this.currentCategoryName = null;
-      console.log('[categoryStore] Category cleared.');
-      // localStorage.removeItem('currentCategory');
     },
-    // Action to load category from localStorage (if you implement persistence)
     loadCategoryFromStorage() {
       const storedCategory = localStorage.getItem('currentCategory');
       if (storedCategory) {

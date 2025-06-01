@@ -20,7 +20,6 @@ import DouyinStreamerList from '../components/DouyinStreamerList/index.vue';
 const currentSelectedCategory = ref<DouyinCategorySelectedEvent | null>(null);
 
 const onCategorySelected = (categoryEvent: DouyinCategorySelectedEvent) => {
-  console.log('Douyin category selected in HomeView:', categoryEvent);
   currentSelectedCategory.value = categoryEvent;
 }
 </script>
@@ -34,9 +33,7 @@ const onCategorySelected = (categoryEvent: DouyinCategorySelectedEvent) => {
 }
 
 .douyin-category-section {
-  flex-shrink: 0; /* Prevent category section from shrinking */
-  /* Add any specific styling for the category section if needed, like a bottom border */
-  /* border-bottom: 1px solid var(--border-color, #333); */
+  flex-shrink: 0;
 }
 
 .douyin-streamer-list-section {

@@ -1,14 +1,9 @@
-// import type { LiveStreamer } from "./types"; // Removed self-import
-
-// Moved from apiService.ts
 export type SupportedPlatform = 'douyu' | 'bilibili' | 'douyin'; // Add other platforms as needed
-
-// Common platform types placeholder 
+ 
 
 export enum Platform {
   DOUYU = 'DOUYU',
-  DOUYIN = 'DOUYIN',
-  // Add other platforms here
+  DOUYIN = 'DOUYIN'
 }
 
 export type LiveStatus = 'LIVE' | 'REPLAY' | 'OFFLINE' | 'UNKNOWN';
@@ -93,8 +88,7 @@ export interface StreamPlaybackDetails {
   roomId: string;
   primaryUrl: string; // The main URL to play (e.g., highest quality or default)
   format?: 'm3u8' | 'flv' | 'mp4' | 'other'; // Optional: format of the primaryUrl
-  qualityOptions?: StreamQuality[]; // Optional: if multiple qualities are available
-  // Add other relevant playback info, e.g., headers, drm info if needed later
+  qualityOptions?: StreamQuality[];
 }
 
 export interface CommonPlatformCategory {

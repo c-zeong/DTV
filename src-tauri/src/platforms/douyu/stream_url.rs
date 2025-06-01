@@ -28,7 +28,6 @@ struct DouYu {
 
 impl DouYu {
     async fn new(rid: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        println!("Creating new DouYu instance for room {}", rid);
         let client = HttpClient::builder()
             .redirect_policy(RedirectPolicy::Follow)
             .default_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -48,7 +47,6 @@ impl DouYu {
     }
 
     async fn get_pc_js(&self, cdn: &str, rate: i32) -> Result<String, Box<dyn std::error::Error>> {
-        println!("[Douyu Stream URL] Checking room status for room {}", self.rid);
         match self.check_room_status().await {
             Ok(true) => {
                 println!("[Douyu Stream URL] Room {} is live. Proceeding to fetch stream URL.", self.rid);
@@ -59,14 +57,9 @@ impl DouYu {
             }
             Err(e) => {
                 println!("[Douyu Stream URL] Error checking room status for room {}: {}. Proceeding with caution or returning error.", self.rid, e);
-                // Depending on policy, you might want to return an error here, 
-                // or try to get the stream URL anyway if status check is unreliable.
-                // For now, let's return an error to be safe.
                 return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("检查房间状态失败: {}", e))));
             }
         }
-
-        println!("Fetching webpage for room {}", self.rid);
         // 获取PC网页内容
         let request = Request::builder()
             .method(http::Method::GET)
@@ -78,8 +71,6 @@ impl DouYu {
 
         let text = self.client.send(request)?
             .text()?;
-
-        println!("Extracting JS function from webpage");
         // 提取JS函数
         let re = Regex::new(r"(vdwdae325w_64we[\s\S]*function ub98484234[\s\S]*?)function")?;
         let result = re.captures(&text)
@@ -91,8 +82,6 @@ impl DouYu {
         let re_eval = Regex::new(r"eval.*?;\}")?;
         let func_ub9 = re_eval.replace_all(result, "strc;}");
 
-        println!("Executing JS to get parameters");
-        // 执行JS获取参数 - 使用 deno_core
         let mut runtime = JsRuntime::new(RuntimeOptions::default());
         
         // 将字符串转换为静态字符串
@@ -107,7 +96,6 @@ impl DouYu {
             result.to_rust_string_lossy(scope)
         };
 
-        println!("Extracting v parameter");
         // 提取v参数
         let re = Regex::new(r"v=(\d+)")?;
         let v = re.captures(&res)
@@ -123,7 +111,6 @@ impl DouYu {
 
         let rb = Self::md5(&format!("{}{}{}{}", self.rid, self.did, &t10, v));
 
-        println!("Building sign function");
         // 构造签名函数
         let func_sign = res.replace("return rt;})", "return rt;}");
         let func_sign = func_sign.replace("(function (", "function sign(");
@@ -149,7 +136,6 @@ impl DouYu {
 
         params.push_str(&format!("&cdn={}&rate={}", cdn, rate));
 
-        println!("Fetching stream URL for room {}", self.rid);
         // 获取真实URL
         let url = format!("https://www.douyu.com/lapi/live/getH5Play/{}", self.rid);
         let request = Request::builder()
@@ -161,7 +147,6 @@ impl DouYu {
             .body(params)?;
 
         let mut response = self.client.send(request)?;
-        println!("API response status: {}", response.status());
         
         let json: serde_json::Value = response.json()?;
 
@@ -170,7 +155,6 @@ impl DouYu {
         let rtmp_live = data["rtmp_live"].as_str().ok_or("No rtmp_live field")?;
 
         let final_url = format!("{}/{}", rtmp_url, rtmp_live);
-        println!("Successfully got stream URL for room {}", self.rid);
         
         Ok(final_url)
     }
@@ -181,7 +165,6 @@ impl DouYu {
 
     async fn check_room_status(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let room_api_url = format!("http://open.douyucdn.cn/api/RoomApi/room/{}", self.rid);
-        println!("[Douyu Stream URL] Calling room API: {}", room_api_url);
 
         let request = Request::builder()
             .method(http::Method::GET)
@@ -208,18 +191,15 @@ impl DouYu {
                 match data.room_status.as_deref() {
                     Some("1") => Ok(true), // Live
                     Some("2") => Ok(false), // Not live
-                    Some(status) => {
-                        println!("[Douyu Stream URL] Unknown room_status '{}' for room {}. Assuming not live.", status, self.rid);
+                    Some(_status) => {
                         Ok(false) // Or handle as an error / unknown state
                     }
                     None => {
-                        println!("[Douyu Stream URL] room_status field is missing for room {}. Assuming not live.", self.rid);
                         Ok(false) // Or handle as an error
                     }
                 }
             }
             None => {
-                 println!("[Douyu Stream URL] No 'data' field in Room API response for {}. Assuming not live.", self.rid);
                  Err("No 'data' field in Room API response".into())
             }
         }
@@ -227,7 +207,6 @@ impl DouYu {
 }
 
 pub async fn get_stream_url(room_id: &str) -> Result<String, Box<dyn std::error::Error>> {
-    println!("Starting to fetch stream URL for room {}", room_id);
     let douyu = DouYu::new(room_id).await?;
     let url = douyu.get_real_url().await?;
     Ok(url)  // 直接返回实际的流地址

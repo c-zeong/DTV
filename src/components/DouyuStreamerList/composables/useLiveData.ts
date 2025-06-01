@@ -16,7 +16,6 @@ interface LiveListDataWrapper {
   list: Streamer[]
   total?: number // total might be optional or not available for all endpoints
   page_count?: number // page_count might also be available
-  // Add other fields if the Rust structs return them
 }
 
 // This interface should match FrontendLiveListResponse from Rust
@@ -33,7 +32,6 @@ export function useLiveData() { // Removed initialCate2 argument
   const currentPage = ref(0) // 0-indexed for logic, convert to 1-indexed for API if needed
   const hasMore = ref(true)
   const isLoading = ref(false)
-  // const currentCategoryInfo = ref<{ type: string, id: string } | null>(null); // Internal store if needed
 
   const fetchStreamers = async (categoryType: 'cate2' | 'cate3', categoryId: string, pageToFetch: number) => {
     if (!categoryId) {
@@ -45,7 +43,6 @@ export function useLiveData() { // Removed initialCate2 argument
     }
     
     isLoading.value = true;
-    console.log(`[useLiveData] Fetching streamers. Type: ${categoryType}, ID: ${categoryId}, PageToFetch (0-indexed): ${pageToFetch}`);
 
     let command = '';
     let params: any = {};
@@ -74,8 +71,6 @@ export function useLiveData() { // Removed initialCate2 argument
       // Invoke now expects the deserialized object directly based on Rust function return type
       const apiResponse = await invoke<LiveListApiResponse>(command, params);
       
-      console.log(`[useLiveData] Response for ${command}:`, JSON.stringify(apiResponse, null, 2));
-      
       if (apiResponse.error === 0 && apiResponse.data) {
         const newList = apiResponse.data.list || [];
         if (pageToFetch === 0) {
@@ -94,10 +89,6 @@ export function useLiveData() { // Removed initialCate2 argument
           // If no total or page_count, assume more if we got a full page
           hasMore.value = newList.length === PAGE_SIZE;
         }
-        
-        // Update current page if the fetch was successful and for this page
-        // This is handled by the component calling fetchStreamers with incremented page
-        // currentPage.value = pageToFetch; // Not strictly needed here as component controls pageToFetch
 
       } else {
         console.error('[useLiveData] Error from API or no data:', apiResponse.msg || 'Unknown API error');

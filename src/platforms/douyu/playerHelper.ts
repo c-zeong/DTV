@@ -21,7 +21,6 @@ export interface DouyuRustDanmakuPayload {
 }
 
 export async function getDouyuStreamConfig(roomId: string): Promise<{ streamUrl: string, streamType: string | undefined }> {
-  console.log('[DouyuPlayerHelper] Fetching Douyu stream details for roomId:', roomId);
   let finalStreamUrl: string | null = null;
   let streamType: string | undefined = undefined;
   const MAX_STREAM_FETCH_ATTEMPTS = 1; // Changed to 1 attempt
@@ -32,7 +31,6 @@ export async function getDouyuStreamConfig(roomId: string): Promise<{ streamUrl:
       if (playbackDetails && playbackDetails.primaryUrl) {
         finalStreamUrl = playbackDetails.primaryUrl;
         streamType = playbackDetails.format === 'm3u8' ? 'hls' : playbackDetails.format;
-        console.log(`[DouyuPlayerHelper] Stream details acquired on attempt ${attempt}:`, { finalStreamUrl, streamType });
         break; 
       } else {
         // This case might be redundant if fetchStreamPlaybackDetails throws an error for empty/null URLs
@@ -75,8 +73,7 @@ export async function getDouyuStreamConfig(roomId: string): Promise<{ streamUrl:
   try {
     // Assuming stopProxy is handled separately or before calling this if needed
     await invoke('set_stream_url_cmd', { url: finalStreamUrl });
-    const proxyUrl = await invoke<string>('start_proxy');
-    console.log('[DouyuPlayerHelper] Douyu Proxy URL:', proxyUrl);
+    const proxyUrl = await invoke<string>('start_proxy')
     return { streamUrl: proxyUrl, streamType };
   } catch (e: any) {
     throw new Error(`设置斗鱼代理失败: ${e.message}`);
@@ -88,66 +85,25 @@ export async function startDouyuDanmakuListener(
   artInstance: Artplayer, // For emitting danmaku to player
   danmakuMessagesRef: Ref<DanmakuMessage[]> // For updating DanmuList
 ): Promise<() => void> {
-  console.log('[DouyuPlayerHelper] Invoking start_danmaku_listener for room:', roomId);
-  console.log('[DouyuPlayerHelper] Received artInstance:', artInstance); // Log artInstance
-  if (artInstance && artInstance.plugins) {
-    console.log('[DouyuPlayerHelper] artInstance.plugins:', artInstance.plugins); // Log plugins object
-    console.log('[DouyuPlayerHelper] artInstance.plugins.artplayerPluginDanmuku:', artInstance.plugins.artplayerPluginDanmuku); // Log danmuku plugin
-  } else {
-    console.log('[DouyuPlayerHelper] artInstance or artInstance.plugins is NULL/UNDEFINED.');
-  }
 
   await invoke('start_danmaku_listener', { roomId });
   
   const eventName = `danmaku-${roomId}`;
-  console.log(`[DouyuPlayerHelper] Setting up event listener for: ${eventName}`);
 
   const unlisten = await listen<DouyuRustDanmakuPayload>(eventName, (event: TauriEvent<DouyuRustDanmakuPayload>) => {
-    console.log(`[DouyuPlayerHelper] Event received on ${eventName}:`, JSON.stringify(event.payload)); // Log received event payload
-
-    // Add detailed logging here, inside the callback
-    console.log('[DouyuPlayerHelper] INSIDE CALLBACK - Checking artInstance state:');
-    if (!artInstance) {
-      console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance is NULL or UNDEFINED.');
-    } else {
-      console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance exists.');
-      if (!artInstance.plugins) {
-        console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins is NULL or UNDEFINED.');
-      } else {
-        console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins exists:', artInstance.plugins);
-        if (artInstance.plugins.artplayerPluginDanmuku === undefined) {
-          console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku is UNDEFINED.');
-        } else if (artInstance.plugins.artplayerPluginDanmuku === null) {
-          console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku is NULL.');
-        } else {
-          console.log('[DouyuPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku exists:', artInstance.plugins.artplayerPluginDanmuku);
-        }
-      }
-    }
-    console.log('[DouyuPlayerHelper] INSIDE CALLBACK - event.payload exists?:', !!event.payload);
 
     if (artInstance && artInstance.plugins && artInstance.plugins.artplayerPluginDanmuku && event.payload) {
-      // const douyuP = event.payload; // Old raw payload
-      // let frontendDanmaku: DanmakuMessage | null = null; // Old logic
 
-      // Call the parser, which handles filtering of 'uenter'
       const commonDanmaku = parseDouyuDanmakuMessage(event.payload);
-      console.log(`[DouyuPlayerHelper] Parsed commonDanmaku for ${eventName}:`, commonDanmaku ? JSON.stringify(commonDanmaku) : 'null'); // Log parsed danmaku
-
-      if (commonDanmaku) { // Check if the message was not filtered out
-        // Adapt CommonDanmakuMessage to the structure ArtPlayer or DanmuList expects, if necessary
-        // For now, assuming CommonDanmakuMessage structure is compatible or direct fields are used.
-        // The important part is that 'uenter' messages result in commonDanmaku being null.
+      
+      if (commonDanmaku) {
 
         artInstance.plugins.artplayerPluginDanmuku.emit({
           text: commonDanmaku.content, // Use content from parsed message
           color: commonDanmaku.color || '#FFFFFF', // Use color from parsed message
-          // ArtPlayer might have other fields, ensure commonDanmaku provides them or defaults are fine
         });
 
-        // Push the parsed and validated CommonDanmakuMessage to the list
-        // Ensure the DanmuList component is compatible with CommonDanmakuMessage structure
-        // or adapt it here. For simplicity, let's assume direct compatibility for critical fields.
+       
         const displayDanmaku: DanmakuMessage = { // Adapting to DanmuList's expected DanmakuMessage type
             nickname: commonDanmaku.sender.nickname,
             content: commonDanmaku.content,
@@ -165,38 +121,28 @@ export async function startDouyuDanmakuListener(
             danmakuMessagesRef.value.splice(0, danmakuMessagesRef.value.length - 200);
         }
       }
-      // If commonDanmaku is null (e.g., 'uenter' type), it's implicitly skipped here.
-    } else {
-      console.log('[DouyuPlayerHelper] Danmaku received, but Artplayer instance, its plugins, the danmuku plugin, or event payload was not valid/ready. Check preceding logs for details.'); // Enhanced log message
     }
   });
   
-  console.log(`[DouyuPlayerHelper] Danmaku listener started for ${eventName}.`);
   return unlisten;
 }
 
 export async function stopDouyuDanmaku(roomId: string, currentUnlistenFn: (() => void) | null): Promise<void> {
-  console.log('[DouyuPlayerHelper] Attempting to stop danmaku for Douyu room:', roomId);
   if (currentUnlistenFn) {
-    console.log('[DouyuPlayerHelper] Calling unlistenDanmaku function.');
     currentUnlistenFn();
   }
   try {
-    if (roomId) { // Ensure roomId is present
-        console.log('[DouyuPlayerHelper] Invoking stop_danmaku_listener for Douyu room:', roomId);
+    if (roomId) { 
         await invoke('stop_danmaku_listener', { roomId: roomId });
     }
   } catch (error) {
     console.error('[DouyuPlayerHelper] Error invoking stop_danmaku_listener for Douyu:', error);
-    // Potentially re-throw or handle as per application's error strategy
   }
 }
 
 export async function stopDouyuProxy(): Promise<void> {
   try {
-    console.log('[DouyuPlayerHelper] Attempting to stop proxy server.');
     await invoke('stop_proxy');
-    console.log('[DouyuPlayerHelper] Proxy server stop command issued.');
   } catch (e) {
     console.error('[DouyuPlayerHelper] Error stopping proxy server:', e);
   }

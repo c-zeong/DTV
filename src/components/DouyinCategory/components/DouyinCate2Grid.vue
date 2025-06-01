@@ -258,9 +258,6 @@ const selectCate2 = (cate2: DouyinCategory2) => {
   /* padding-right: 16px; */ /* Removed */
 }
 
-/* If .cate2-container-dy already has padding: 16px all around, then the above padding-left/right on .cate2-grid-dy might be removed or set to 0. */
-/* Current .cate2-container-dy has padding: 16px 0; so grid needs its own L/R padding */
-
 
 .cate2-card-dy { /* Douyin: .cate2-card-dy */
   width: 120px; 

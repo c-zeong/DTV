@@ -153,10 +153,14 @@ const isInNativeFullscreen = ref(false);
 const isInWebFullscreen = ref(false);
 const isFullScreen = ref(false); // True if either native or web fullscreen is active
 
-async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, pStreamUrlProp?: string | null, isRefresh: boolean = false) {
-  console.log(`[Player] Initialize: Room=${pRoomId}, Platform=${pPlatform}, StreamURLProp=${pStreamUrlProp}, isRefresh=${isRefresh}, InitialErrorFromProps=${props.initialError}`);
-  
-  // Reset states at the beginning of every initialization attempt
+async function initializePlayerAndStream(
+  pRoomId: string, 
+  pPlatform: Platform, 
+  _pStreamUrlProp?: string | null, 
+  isRefresh: boolean = false,
+  oldRoomIdForCleanup?: string | null,    // New parameter
+  oldPlatformForCleanup?: Platform | null // New parameter
+) {
   isLoadingStream.value = true;
   streamError.value = null; // Clear previous general errors
   isOfflineError.value = false; // Clear previous offline state
@@ -167,7 +171,6 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
 
   // Handle initialError from props (e.g., Douyin pre-check says "主播未开播")
   if (props.initialError && props.initialError.includes('主播未开播')) {
-    console.log(`[Player] Handling initialError from props: ${props.initialError}`);
     streamError.value = props.initialError;
     isOfflineError.value = true;
     // Update reactive player info based on props if offline state is from props
@@ -181,43 +184,51 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
   }
 
   if (art.value) {
-    console.log('[Player] Destroying existing ArtPlayer instance.');
-    await stopCurrentDanmakuListener(props.platform, props.roomId); 
+    console.log(`[Player] Cleaning up old player instance. Old Room: ${oldRoomIdForCleanup}, Old Platform: ${oldPlatformForCleanup}`);
+    // Stop danmaku for the *old* room if IDs are valid
+    if (oldRoomIdForCleanup && oldPlatformForCleanup !== undefined && oldPlatformForCleanup !== null) {
+        await stopCurrentDanmakuListener(oldPlatformForCleanup, oldRoomIdForCleanup);
+    } else {
+        console.warn("[Player] Cleanup in init: Old room/platform for danmaku stop not provided or invalid.");
+    }
     
-    // 销毁 mpegts.js 实例
-    if (flvPlayerInstance.value) {
-        try {
-            flvPlayerInstance.value.destroy();
-            console.log('[Player] Destroyed mpegts.js player instance before new Artplayer.');
-        } catch (e) {
-            console.error('[Player] Error destroying mpegts.js player:', e);
-        }
-        flvPlayerInstance.value = null;
+    // Stop Douyu proxy if the *old* platform was Douyu
+    if (oldPlatformForCleanup === Platform.DOUYU) {
+        await stopDouyuProxy();
+        console.log(`[Player] Douyu proxy stopped for old room: ${oldRoomIdForCleanup}`);
     }
 
-    if (art.value.playing) art.value.pause();
-    art.value.destroy(false); 
+    // Attempt to unload media from Artplayer before destroying it
+    if (art.value.playing) {
+      art.value.pause();
+    }
+    try {
+      console.log(`[Player] Setting old Artplayer URL to empty. Old Room: ${oldRoomIdForCleanup}`);
+      art.value.url = ''; 
+    } catch (e) {
+      console.error('[Player] Error setting old Artplayer URL to empty during cleanup:', e);
+    }
+
+    art.value.destroy(true);
     art.value = null;
+    await nextTick();
+    if (playerContainerRef.value) {
+        playerContainerRef.value.innerHTML = '';
+    }
+    await nextTick();
   }
 
   try {
     let streamConfig: { streamUrl: string, streamType: string | undefined };
 
     if (pPlatform === Platform.DOUYU) {
-      // playerIsLive should be updated by the watcher from props.isLive from DouyuPlayerView
       if (playerIsLive.value === false) { // Explicitly check for false, as null/undefined might mean info not yet loaded
-        console.log(`[Player] Douyu platform: Streamer is explicitly offline (playerIsLive.value is false). Skipping stream fetch.`);
         streamError.value = streamError.value || '主播未开播。'; // Preserve specific error if already set by initialError prop
         isOfflineError.value = true;
         isLoadingStream.value = false;
         return; // Stop further execution for stream fetching and player init
       }
-      // If playerIsLive is true or undefined (meaning DouyuPlayerView might not have passed it, or we assume live by default if prop absent)
-      // then proceed to get stream config.
-      console.log('[Player] Douyu platform: Attempting to get stream config.');
       streamConfig = await getDouyuStreamConfig(pRoomId);
-      // After getting streamConfig, we might get an error or no URL, which will be handled by subsequent checks.
-      // If getDouyuStreamConfig itself determines offline and throws/returns error, it will be caught by the main try-catch.
 
     } else if (pPlatform === Platform.DOUYIN) {
       const douyinConfig = await fetchAndPrepareDouyinStreamConfig(pRoomId);
@@ -255,7 +266,6 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
     let finalArtPlayerStreamType = streamConfig.streamType;
     if (streamConfig.streamUrl && streamConfig.streamUrl.includes('.m3u8')) {
       if (finalArtPlayerStreamType !== 'hls') {
-        console.log(`[Player] URL contains .m3u8. Overriding streamType from '${finalArtPlayerStreamType}' to 'hls'.`);
         finalArtPlayerStreamType = 'hls';
       }
     }
@@ -282,7 +292,6 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
             html: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path></svg>',
             tooltip: '刷新',
             click: async () => {
-              console.log('[Player] Stream Refresh button clicked (from controls option).');
               if (props.roomId && props.platform) {
                 await initializePlayerAndStream(props.roomId, props.platform, props.streamUrl, true);
               } else {
@@ -300,14 +309,11 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
                         if (flvPlayerInstance.value) {
                             try {
                                 flvPlayerInstance.value.destroy();
-                                console.log(`[Player ${platformForLog}] Destroyed previous mpegts.js player instance within customType.flv.`);
                             } catch (e) {
                                 console.error(`[Player ${platformForLog}] Error destroying previous mpegts.js player in customType.flv:`, e);
                             }
                             flvPlayerInstance.value = null;
                         }
-
-                        console.log(`[Player ${platformForLog}] mpegts.js is supported. Initializing FLV player for URL: ${url}`);
                         const flvPlayer = mpegts.default.createPlayer(
                             { type: 'flv', url: url, isLive: true, cors: true, hasAudio: true, hasVideo: true }, 
                             {}
@@ -331,24 +337,11 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
             }
         },
     };
-    console.log(`[Player] Creating Artplayer with options:`, artPlayerOptions);
     art.value = new Artplayer(artPlayerOptions);
 
     art.value.on('ready', async () => {
-      console.log('[Player] Artplayer instance ready.');
-      console.log('[Player] art.value inside ON_READY:', art.value);
-      if (art.value && art.value.plugins) {
-        console.log('[Player] art.value.plugins inside ON_READY:', art.value.plugins);
-        console.log('[Player] art.value.plugins.artplayerPluginDanmuku inside ON_READY:', art.value.plugins.artplayerPluginDanmuku);
-      } else {
-        console.log('[Player] art.value or art.value.plugins is NULL/UNDEFINED inside ON_READY.');
-      }
-
       if (pRoomId && pPlatform && art.value) { 
-        console.log(`[Player] Artplayer ready, conditions met. Attempting to start danmaku for ${pPlatform}/${pRoomId}.`);
         await startCurrentDanmakuListener(pPlatform, pRoomId, art.value);
-      } else {
-        console.log(`[Player] Artplayer ready, but conditions NOT met to start danmaku. pRoomId: ${pRoomId}, pPlatform: ${pPlatform}, art.value: ${!!art.value}`);
       }
     });
     art.value.on('error', (error: any, _reconnectTime: number) => { 
@@ -356,36 +349,26 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
         streamError.value = `播放器错误: ${error.message || error}`; 
     });
     art.value.on('fullscreen', (nativeActive: boolean) => {
-      // console.log(`[Player] Native fullscreen event: ${nativeActive}`); // Optional
       isInNativeFullscreen.value = nativeActive;
 
       if (nativeActive && isInWebFullscreen.value) {
-        // If entering native fullscreen while web fullscreen is active, turn off web fullscreen.
-        // Artplayer might do this automatically, but good to be explicit.
         if (art.value) art.value.fullscreenWeb = false;
         isInWebFullscreen.value = false;
       }
-      // When exiting native fullscreen (!nativeActive), Artplayer 5.2.2 should correctly handle its state.
-      // We just reflect its state. If it also exits web fullscreen, its own fullscreenWeb event should fire.
       
       isFullScreen.value = isInNativeFullscreen.value || isInWebFullscreen.value;
       emit('fullscreen-change', isFullScreen.value);
-      // console.log(`[Player] Native fullscreen handler: Emitted fullscreen-change: ${isFullScreen.value}`); // Optional
     });
 
     art.value.on('fullscreenWeb', (webActive: boolean) => {
-      // console.log(`[Player] Web fullscreen event: ${webActive}`); // Optional
       isInWebFullscreen.value = webActive;
 
       if (webActive && isInNativeFullscreen.value) {
-        // If entering web fullscreen while native fullscreen is active, turn off native fullscreen.
-        // This is mainly for our state consistency, as user would need to exit native FS first via ESC.
         isInNativeFullscreen.value = false;
       }
       
       isFullScreen.value = isInNativeFullscreen.value || isInWebFullscreen.value;
       emit('fullscreen-change', isFullScreen.value);
-      // console.log(`[Player] Web fullscreen handler: Emitted fullscreen-change: ${isFullScreen.value}`); // Optional
     });
 
   } catch (error: any) {
@@ -404,25 +387,13 @@ async function initializePlayerAndStream(pRoomId: string, pPlatform: Platform, p
 
 async function startCurrentDanmakuListener(platform: Platform, roomId: string, artInstance: Artplayer | null) {
   if (!roomId) {
-    console.log('[Player] Danmaku listener start skipped: No room ID.');
     return;
   }
   if (!artInstance) {
-    console.error('[Player] Danmaku listener start skipped: artInstance is null or undefined.');
     return;
   }
   if (isDanmakuListenerActive.value) {
-    console.log('[Player] Danmaku listener start skipped: Listener already active.');
     return;
-  }
-
-  console.log(`[Player] Attempting to start danmaku listener for ${platform}/${roomId}...`);
-  console.log('[Player] artInstance in startCurrentDanmakuListener:', artInstance);
-  if (artInstance.plugins) {
-    console.log('[Player] artInstance.plugins in startCurrentDanmakuListener:', artInstance.plugins);
-    console.log('[Player] artInstance.plugins.artplayerPluginDanmuku in startCurrentDanmakuListener:', artInstance.plugins.artplayerPluginDanmuku);
-  } else {
-    console.log('[Player] artInstance.plugins is NULL/UNDEFINED in startCurrentDanmakuListener.');
   }
 
   isDanmakuListenerActive.value = true;
@@ -430,19 +401,13 @@ async function startCurrentDanmakuListener(platform: Platform, roomId: string, a
   try {
     let stopFn: (() => void) | null = null;
     if (platform === Platform.DOUYU) {
-      // Pass artInstance to the platform-specific helper
       stopFn = await startDouyuDanmakuListener(roomId, artInstance, danmakuMessages); 
     } else if (platform === Platform.DOUYIN) {
-      // Pass artInstance to the platform-specific helper
       stopFn = await startDouyinDanmakuListener(roomId, artInstance, danmakuMessages);
     }
-    // TODO: Add other platforms here if they have danmaku
 
     if (stopFn) {
       unlistenDanmakuFn = stopFn;
-      console.log(`[Player] Danmaku listener started successfully for ${platform}/${roomId}.`);
-
-      // Add a system message for connection success
       const successMessage: DanmakuMessage = {
         id: `system-conn-${Date.now()}`,
         nickname: '系统消息',
@@ -474,26 +439,17 @@ async function startCurrentDanmakuListener(platform: Platform, roomId: string, a
 }
 
 async function stopCurrentDanmakuListener(platform?: Platform, roomId?: string | null | undefined) {
-  console.log(`[Player] stopCurrentDanmakuListener CALLED. Platform: ${platform}, RoomID: ${roomId}, unlistenDanmakuFn exists: ${!!unlistenDanmakuFn}`);
-
   if (platform) {
-    console.log(`[Player] stopCurrentDanmakuListener: Calling platform-specific stop for ${platform}`);
     if (platform === Platform.DOUYU) {
       await stopDouyuDanmaku(roomId!, unlistenDanmakuFn); 
     } else if (platform === Platform.DOUYIN) {
       await stopDouyinDanmaku(unlistenDanmakuFn);
     }
-    // After platform-specific stop, it's assumed unlistenDanmakuFn (if used by the platform's stop function) is handled.
-    // We should nullify the global ref to prevent reuse and ensure it's clean for the next listener.
     if (unlistenDanmakuFn) { 
-        console.log(`[Player] Nullifying unlistenDanmakuFn after platform-specific stop for ${platform}.`);
         unlistenDanmakuFn = null;
     }
 
   } else if (unlistenDanmakuFn) {
-    // Fallback: if no platform specified but an unlisten function exists, it implies a generic cleanup.
-    // This path might be taken if stopCurrentDanmakuListener is called without platform context
-    // AFTER a listener was active.
     console.warn('[Player] stopCurrentDanmakuListener called without platform, but a global unlistenDanmakuFn exists. Calling it now.');
     try {
       unlistenDanmakuFn();
@@ -503,32 +459,20 @@ async function stopCurrentDanmakuListener(platform?: Platform, roomId?: string |
       // Still nullify to prevent repeated errors with a bad function ref
       unlistenDanmakuFn = null; 
     }
-  } else {
-    console.log('[Player] stopCurrentDanmakuListener: No platform specified and no global unlistenDanmakuFn to act upon. Listener might have already been stopped or was never started.');
   }
 
   isDanmakuListenerActive.value = false;
-  console.log('[Player] Danmaku listener stopped (isDanmakuListenerActive set to false).');
 }
 
 const retryInitialization = () => {
   if (props.roomId && props.platform) {
-    console.log('[Player] Retrying initialization...');
     
     if (props.platform === Platform.DOUYU) {
-      console.log('[Player] Douyu platform: Emitting request-refresh-details to parent.');
-      // Set loading state immediately to give user feedback
       isLoadingStream.value = true; 
       streamError.value = null; // Clear previous errors
       isOfflineError.value = false; // Clear offline state
       emit('request-refresh-details');
-      // For Douyu, we now rely on the parent (DouyuPlayerView) to re-fetch details.
-      // When DouyuPlayerView updates the props (like `isLive`), 
-      // the watcher in MainPlayer (that listens to prop changes)
-      // will automatically call `initializePlayerAndStream`.
     } else {
-      // For other platforms like Douyin, MainPlayer handles its own fetching 
-      // directly within initializePlayerAndStream.
       initializePlayerAndStream(props.roomId, props.platform, props.streamUrl);
     }
   } else {
@@ -556,48 +500,54 @@ watch([() => props.roomId, () => props.platform, () => props.streamUrl, () => pr
       if (!(props.initialError && props.initialError.includes('主播未开播'))) {
         isOfflineError.value = false; 
       }
-      if (newRoomId !== oldRoomId || newPlatform !== oldPlatform || (newPlatform === Platform.DOUYIN && newStreamUrl !== _oldStreamUrl)) {
-         console.log(`[Player] Props changed. Re-initializing player for ${newPlatform} room ${newRoomId}.`);
-        initializePlayerAndStream(newRoomId, newPlatform, newStreamUrl); // Douyin will ignore newStreamUrl now
+
+      // Determine if re-initialization is needed
+      const isInitialCall = oldRoomId === undefined && oldPlatform === undefined;
+      const hasSwitchedStream = newRoomId !== oldRoomId || newPlatform !== oldPlatform;
+      // Douyin might also re-init if its specific stream URL prop changes (though less likely with current proxy setup)
+      const douyinStreamUrlChanged = newPlatform === Platform.DOUYIN && newStreamUrl !== _oldStreamUrl;
+
+      const needsReInit = hasSwitchedStream || isInitialCall || douyinStreamUrlChanged;
+
+      if (needsReInit) {
+        // Pass oldRoomId and oldPlatform (which might be undefined on initial call)
+        // initializePlayerAndStream will handle undefined cleanup IDs gracefully.
+        initializePlayerAndStream(newRoomId, newPlatform, newStreamUrl, false, oldRoomId, oldPlatform);
       }
     } else if (!newRoomId && art.value) { 
-      console.log('[Player] No newRoomId, stopping and clearing player.');
-      if (oldRoomId && oldPlatform) { 
+      // This block handles clearing the player when roomId becomes null (e.g. navigating away from player)
+      // It correctly uses oldRoomId and oldPlatform for cleanup as these are from the watcher.
+      if (oldRoomId && oldPlatform !== null && oldPlatform !== undefined) { 
           await stopCurrentDanmakuListener(oldPlatform, oldRoomId);
           if (oldPlatform === Platform.DOUYU) {
-              console.log('[Player] Watcher clearing player: old platform was Douyu, stopping proxy.');
-              await stopDouyuProxy(); 
+              await stopDouyuProxy();
           }
-      } else {
-          console.log('[Player] No oldRoomId/oldPlatform to stop danmaku/proxy for.');
       }
       
-      // 销毁 mpegts.js 实例 (当房间关闭导致播放器清理时)
-      if (flvPlayerInstance.value) {
-          try {
-              flvPlayerInstance.value.destroy();
-              console.log('[Player] Destroyed mpegts.js player instance in watcher (room closed).');
-          } catch (e) {
-              console.error('[Player] Error destroying mpegts.js player in watcher:', e);
-          }
-          flvPlayerInstance.value = null;
-      }
+      // Player instance (art and flv) destruction is now handled by onUnmounted.
+      // We only reset component state here.
 
-      if (art.value.playing) art.value.pause();
-      art.value.destroy(false); // art.value.destroy(true) on unmount for full cleanup
-      art.value = null;
+      // // 销毁 mpegts.js 实例 (当房间关闭导致播放器清理时)
+      // if (flvPlayerInstance.value) {
+      //     try {
+      //         flvPlayerInstance.value.destroy();
+      //     } catch (e) {
+      //         console.error('[Player] Error destroying mpegts.js player in watcher:', e);
+      //     }
+      //     flvPlayerInstance.value = null;
+      // }
+
+      // // 在这里，紧接着 mpegts.js 实例销毁之后，也应该销毁 artplayer 实例
+      // if (art.value && art.value.playing) art.value.pause(); // Check art.value existence before accessing playing
+      // if (art.value) art.value.destroy(true); 
+      // art.value = null; // Ensure art.value is nulled out after destruction
+      
       isLoadingStream.value = false;
       danmakuMessages.value = [];
       streamError.value = null;
-      isOfflineError.value = false; // Clear offline error state
+      isOfflineError.value = false; 
     }
-
-    // If props.roomId and props.platform are present at mount.
-    // No need to call it explicitly here again.
     if (!props.roomId || !props.platform) {
-      console.log('[Player] Mounted without RoomID/Platform. Player will be empty.');
-      // If initialError is present from props even without roomId/platform (e.g. a general error page routing here)
-      // Ensure isLoading is false and error states are reflected.
       if (props.initialError) {
         if (props.initialError.includes('主播未开播')) {
             streamError.value = props.initialError;
@@ -614,14 +564,7 @@ watch([() => props.roomId, () => props.platform, () => props.streamUrl, () => pr
 );
 
 onMounted(async () => {
-  console.log(`[Player] Mounted. RoomID: ${props.roomId}, Platform: ${props.platform}, URL: ${props.streamUrl}`);
-  // The immediate watcher should handle the initial call to initializePlayerAndStream
-  // if props.roomId and props.platform are present at mount.
-  // No need to call it explicitly here again.
   if (!props.roomId || !props.platform) {
-    console.log('[Player] Mounted without RoomID/Platform. Player will be empty.');
-    // If initialError is present from props even without roomId/platform (e.g. a general error page routing here)
-    // Ensure isLoading is false and error states are reflected.
     if (props.initialError) {
       if (props.initialError.includes('主播未开播')) {
           streamError.value = props.initialError;
@@ -636,35 +579,59 @@ onMounted(async () => {
 });
 
 onUnmounted(async () => {
-  console.log('[Player] Component unmounted. Cleaning up...');
   const platformToStop: Platform = props.platform;
   const roomIdToStop: string | null = props.roomId;
   await stopCurrentDanmakuListener(platformToStop, roomIdToStop);
 
   if (props.platform === Platform.DOUYU) {
-      console.log('[Player] Unmounting: Ensuring Douyu proxy is stopped if it was the active platform.');
       await stopDouyuProxy();
   }
 
-  // 销毁 mpegts.js 实例
-  if (flvPlayerInstance.value) {
-      try {
-          flvPlayerInstance.value.destroy();
-          console.log('[Player] Destroyed mpegts.js player instance on unmount.');
-      } catch (e) {
-          console.error('[Player] Error destroying mpegts.js player on unmount:', e);
-      }
-      flvPlayerInstance.value = null;
-  }
-
   if (art.value) {
-    console.log('[Player] Unmounting: Destroying ArtPlayer instance.');
-    if (art.value.playing) art.value.pause();
-    art.value.destroy(true); // true to remove video element and all listeners
+    if (art.value.playing) {
+      art.value.pause();
+    }
+    
+    // Attempt to unload media from Artplayer before flv instance and artplayer itself are destroyed
+    try {
+      console.log(`[Player] Unmounting: Setting Artplayer URL to empty for room ${props.roomId}`);
+      art.value.url = ''; 
+    } catch (e) {
+      console.error('[Player] Error setting Artplayer URL to empty on unmount:', e);
+    }
+
+    // More aggressively stop and destroy mpegts.js instance if it exists
+    if (flvPlayerInstance.value) {
+        try {
+            if (typeof flvPlayerInstance.value.unload === 'function') {
+                flvPlayerInstance.value.unload();
+                console.log(`[Player] Unmounting: Called flvPlayerInstance.unload() for room ${props.roomId}`);
+            }
+            if (typeof flvPlayerInstance.value.detachMediaElement === 'function') {
+                flvPlayerInstance.value.detachMediaElement();
+                console.log(`[Player] Unmounting: Called flvPlayerInstance.detachMediaElement() for room ${props.roomId}`);
+            }
+            flvPlayerInstance.value.destroy();
+            console.log(`[Player] Unmounting: Called flvPlayerInstance.destroy() for room ${props.roomId}`);
+        } catch (e) {
+            console.error('[Player] Error destroying mpegts.js player on unmount:', e);
+        }
+        flvPlayerInstance.value = null;
+    }
+
+    try {
+      art.value.destroy(true); // true to remove video element and all listeners
+    } catch (e) {
+      console.error('[Player] Error destroying Artplayer instance on unmount:', e);
+    }
     art.value = null;
+  } else { // art.value was already null
+      if (flvPlayerInstance.value) { // But flv instance might exist
+          try { flvPlayerInstance.value.destroy(); } catch (e) { console.error('[Player] Error destroying orphaned mpegts.js player on unmount:', e); }
+          flvPlayerInstance.value = null;
+      }
   }
   danmakuMessages.value = []; 
-  console.log('[Player] Cleanup on unmount finished.');
 });
 
 </script>

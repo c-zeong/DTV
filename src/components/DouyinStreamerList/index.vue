@@ -58,45 +58,33 @@ const props = defineProps<{
 const router = useRouter();
 const scrollComponentRef = ref<HTMLElement | null>(null);
 const sentinelRef = ref<HTMLElement | null>(null);
-
 const categoryHref = computed(() => props.selectedCategory?.cate2Href || null);
 const categoryName = computed(() => props.selectedCategory?.cate2Name || null);
 
-// Douyin: Partition is the last part of href after splitting by '_', Type is the second-to-last.
+
 const douyinPartition = computed(() => { 
-  console.log('[DouyinStreamerList DEBUG] Recalculating douyinPartition. cate2Href:', props.selectedCategory?.cate2Href);
   if (!props.selectedCategory?.cate2Href) {
-    console.log('[DouyinStreamerList DEBUG] douyinPartition: cate2Href is null or empty.');
     return null;
   }
   const parts = props.selectedCategory.cate2Href.split('_');
-  console.log('[DouyinStreamerList DEBUG] douyinPartition - parts:', JSON.stringify(parts), 'length:', parts.length);
-
+  
   if (parts.length >= 1) { // Check if there's at least one part (for the last part)
       const partitionId = parts[parts.length - 1];
-      console.log('[DouyinStreamerList DEBUG] douyinPartition: Parsing successful. Returning:', partitionId);
       return partitionId;
   }
-  console.warn('[DouyinStreamerList] Failed to parse douyinPartition from href (not enough parts): ', props.selectedCategory.cate2Href);
   return null; 
 });
 
 const douyinPartitionType = computed(() => { 
-  console.log('[DouyinStreamerList DEBUG] Recalculating douyinPartitionType. cate2Href:', props.selectedCategory?.cate2Href);
   if (!props.selectedCategory?.cate2Href) {
-    console.log('[DouyinStreamerList DEBUG] douyinPartitionType: cate2Href is null or empty.');
     return null;
   }
   const parts = props.selectedCategory.cate2Href.split('_');
-  console.log('[DouyinStreamerList DEBUG] douyinPartitionType - parts:', JSON.stringify(parts), 'length:', parts.length);
 
    if (parts.length >= 2) { // Need at least two parts to get second-to-last
       const typeId = parts[parts.length - 2];
-      console.log('[DouyinStreamerList DEBUG] douyinPartitionType: Parsing successful. Returning:', typeId);
       return typeId;
   }
-  // If not enough parts for type, it might be a top-level category or malformed, but partition might still be valid for some APIs if it's the only ID needed.
-  console.warn('[DouyinStreamerList] Failed to parse douyinPartitionType from href (not enough parts for type): ', props.selectedCategory.cate2Href);
   return null; // Explicitly return null if type cannot be determined
 });
 
@@ -134,18 +122,13 @@ onBeforeUnmount(() => {
   if (observer) observer.disconnect();
 });
 
-watch(() => props.selectedCategory, (newCategory, oldCategory) => { 
-  console.log('[DouyinStreamerList DEBUG] props.selectedCategory changed.');
-  console.log('[DouyinStreamerList DEBUG] Old category:', JSON.stringify(oldCategory));
-  console.log('[DouyinStreamerList DEBUG] New category:', JSON.stringify(newCategory));
-
-  if (newCategory && newCategory.cate2Href) {
-    console.log('[DouyinStreamerList] Category selected, calling loadInitialRooms. cate2Href:', newCategory.cate2Href);
-    console.log('[DouyinStreamerList DEBUG] Computed douyinPartition before load:', douyinPartition.value);
-    console.log('[DouyinStreamerList DEBUG] Computed douyinPartitionType before load:', douyinPartitionType.value);
-    loadInitialRooms(); 
+watch(() => props.selectedCategory, (newCategory, _oldCategory) => {
+  if (newCategory) {
+    // console.log('[DouyinStreamerList] Selected category changed:', newCategory, _oldCategory);
+    if (newCategory.cate2Href) { // Use cate2Href to check if a category is selected
+        loadInitialRooms();
+    }
   } else {
-    console.log('[DouyinStreamerList DEBUG] Category deselected or href missing. Clearing rooms.');
     rooms.value = [];
     hasMore.value = false;
     error.value = null;
@@ -157,14 +140,12 @@ watch(() => props.selectedCategory, (newCategory, oldCategory) => {
 
 const goToPlayer = (roomId: string) => {
   if (!roomId) return;
-  // Navigate to the new Douyin specific player route
   router.push({ name: 'douyinPlayer', params: { roomId } }); 
 };
 
 </script>
 
 <style scoped>
-/* Styles for DouyinStreamerList/index.vue, adapted from DouyuStreamerList/index.vue */
 .douyin-live-list-container { /* Original: .live-list-container-infinite */
   display: flex;
   flex-direction: column;

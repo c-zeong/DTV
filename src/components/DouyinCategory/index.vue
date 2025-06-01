@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed, nextTick, onActivated } from 'vue'
+import { ref, onMounted, computed, nextTick, onActivated } from 'vue'
 import DouyinCate1List from './components/DouyinCate1List.vue'
 import DouyinCate2Grid from './components/DouyinCate2Grid.vue'
 import { douyinCategoriesData } from '../../platforms/douyin/douyinCategoriesData'
@@ -111,16 +111,7 @@ const toggleExpand = () => {
   })
 }
 
-watch(isExpanded, (newVal) => {
-  console.log('Douyin Category expanded state:', newVal)
-})
-
 const handleCate2GridHeightChanged = () => {
-  // This event is from DouyinCate2Grid when its height settles after animation or content change.
-  // The main category-list (this component) might need to adjust its own max-height if it wraps DouyinCate2Grid.
-  // For now, we assume the .category-list max-height transition handles this adequately.
-  // If further coordination is needed, logic can be added here.
-  console.log('DouyinCate2Grid height changed, parent notified.');
   emit('category-section-height-settled'); // Propagate this event if HomeView needs it
 }
 
@@ -132,7 +123,6 @@ onActivated(() => {
   const currentSelectedCate2 = currentCate2List.value.find(c2 => c2.href === selectedCate2Href.value);
 
   if (currentSelectedCate1 && currentSelectedCate2) {
-    console.log('[DouyinCategory] Activated: Re-emitting selected cate2:', currentSelectedCate2.title);
     emit('category-selected', {
       type: 'cate2',
       cate1Href: currentSelectedCate1.href,
@@ -141,15 +131,7 @@ onActivated(() => {
       cate2Name: currentSelectedCate2.title,
     });
   } else if (currentSelectedCate1 && !selectedCate2Href.value) {
-    // This case means a C1 is selected, but no C2 (or C2 was reset).
-    // We might want to re-trigger the auto-selection of the first C2 if currentCate2List is populated.
-    // Or, if the design expects just C1 to be a valid emitted state:
-    // emit('category-selected', { type: 'cate1', cate1Href: currentSelectedCate1.href, cate1Name: currentSelectedCate1.title });
-    console.log('[DouyinCategory] Activated: C1 selected (' + currentSelectedCate1.title + '), but no C2. Current C2 list length: ' + currentCate2List.value.length);
-    // If there are C2 categories available for the selected C1, and none is selected, re-trigger auto-selection of first C2.
-    // This mirrors the logic in selectCate1.
     if (currentCate2List.value.length > 0) {
-        console.log('[DouyinCategory] Activated: Auto-selecting first C2 for previously selected C1.');
         handleCate2SelectAndCollapse(currentCate2List.value[0]); // This will emit 'category-selected'
     }
   }
@@ -159,8 +141,6 @@ onActivated(() => {
   });
 });
 
-// Expose methods if needed, similar to DouyuCategory
-// defineExpose({ reloadCategories: () => { /* ... */ } })
 </script>
 
 <style scoped>

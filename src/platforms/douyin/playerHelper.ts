@@ -6,8 +6,7 @@ import { Platform } from '../common/types';
 import type { DanmakuMessage, RustGetStreamUrlPayload } from '../../components/player/types';
 import type { LiveStreamInfo } from '../common/types';
 
-// Specific type for Douyin's raw danmaku payload from Rust event
-// This was named RustDanmakuPayload in player/index.vue
+
 export interface DouyinRustDanmakuPayload {
   room_id?: string; 
   user: string;      // Nickname from Rust's DanmakuFrontendPayload
@@ -16,16 +15,6 @@ export interface DouyinRustDanmakuPayload {
   fans_club_level: number; // from Rust's i32
 }
 
-// Old synchronous function, to be replaced or removed
-// export function getDouyinStreamConfig(streamUrlProp: string | undefined | null): { streamUrl: string, streamType: string | undefined } {
-//   if (!streamUrlProp) {
-//     throw new Error('抖音直播流 URL 未提供。');
-//   }
-//   const streamType = streamUrlProp.includes('.m3u8') ? 'hls' : (streamUrlProp.includes('.flv') ? 'flv' : undefined);
-//   return { streamUrl: streamUrlProp, streamType };
-// }
-
-// New asynchronous function to fetch Douyin stream details including URL and metadata
 export async function fetchAndPrepareDouyinStreamConfig(roomId: string): Promise<{ 
   streamUrl: string | null;
   streamType: string | undefined; 
@@ -35,7 +24,6 @@ export async function fetchAndPrepareDouyinStreamConfig(roomId: string): Promise
   isLive: boolean; 
   initialError: string | null; // Made non-optional, will always be string or null
 }> {
-  console.log('[DouyinPlayerHelper] Fetching Douyin stream details for roomId:', roomId);
   if (!roomId) {
     return { streamUrl: null, streamType: undefined, title: null, anchorName: null, avatar: null, isLive: false, initialError: '房间ID未提供' };
   }
@@ -109,45 +97,17 @@ export async function startDouyinDanmakuListener(
   artInstance: Artplayer, // For emitting danmaku to player
   danmakuMessagesRef: Ref<DanmakuMessage[]> // For updating DanmuList
 ): Promise<() => void> {
-  console.log('[DouyinPlayerHelper] Invoking start_douyin_danmu_listener for room:', roomId);
-  console.log('[DouyinPlayerHelper] Received artInstance:', artInstance); // Log artInstance
-  if (artInstance && artInstance.plugins) {
-    console.log('[DouyinPlayerHelper] artInstance.plugins:', artInstance.plugins); // Log plugins object
-    console.log('[DouyinPlayerHelper] artInstance.plugins.artplayerPluginDanmuku:', artInstance.plugins.artplayerPluginDanmuku); // Log danmuku plugin
-  } else {
-    console.log('[DouyinPlayerHelper] artInstance or artInstance.plugins is NULL/UNDEFINED.');
-  }
-
+  
   const rustPayload: RustGetStreamUrlPayload = { 
     args: { room_id_str: roomId }, 
     platform: Platform.DOUYIN, 
   };
   await invoke('start_douyin_danmu_listener', { payload: rustPayload });
   
-  const eventName = 'danmaku-message'; // Douyin uses a generic event name
-  console.log(`[DouyinPlayerHelper] Setting up event listener for: ${eventName}`);
+  const eventName = 'danmaku-message';
 
   const unlisten = await listen<DouyinRustDanmakuPayload>(eventName, (event: TauriEvent<DouyinRustDanmakuPayload>) => {
-    // Add detailed logging here, inside the callback
-    console.log('[DouyinPlayerHelper] INSIDE CALLBACK - Checking artInstance state:');
-    if (!artInstance) {
-      console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance is NULL or UNDEFINED.');
-    } else {
-      console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance exists.');
-      if (!artInstance.plugins) {
-        console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance.plugins is NULL or UNDEFINED.');
-      } else {
-        console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance.plugins exists:', artInstance.plugins);
-        if (artInstance.plugins.artplayerPluginDanmuku === undefined) {
-          console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku is UNDEFINED.');
-        } else if (artInstance.plugins.artplayerPluginDanmuku === null) {
-          console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku is NULL.');
-        } else {
-          console.log('[DouyinPlayerHelper] INSIDE CALLBACK - artInstance.plugins.artplayerPluginDanmuku exists:', artInstance.plugins.artplayerPluginDanmuku);
-        }
-      }
-    }
-    console.log('[DouyinPlayerHelper] INSIDE CALLBACK - event.payload exists?:', !!event.payload);
+    
 
     if (artInstance && artInstance.plugins && artInstance.plugins.artplayerPluginDanmuku && event.payload) {
       const rustP = event.payload;
@@ -167,23 +127,16 @@ export async function startDouyinDanmakuListener(
       if (danmakuMessagesRef.value.length > 200) { // Manage danmaku array size
         danmakuMessagesRef.value.splice(0, danmakuMessagesRef.value.length - 200);
       }
-    } else {
-      console.log('[DouyinPlayerHelper] Danmaku received, but Artplayer instance, its plugins, the danmuku plugin, or event payload was not valid/ready. Check preceding logs for details.'); // Enhanced log message
     }
   });
-  
-  console.log(`[DouyinPlayerHelper] Danmaku listener started for ${eventName}.`);
   return unlisten;
 }
 
 export async function stopDouyinDanmaku(currentUnlistenFn: (() => void) | null): Promise<void> {
-  console.log('[DouyinPlayerHelper] Attempting to stop danmaku for Douyin.');
   if (currentUnlistenFn) {
-    console.log('[DouyinPlayerHelper] Calling unlistenDanmaku function.');
     currentUnlistenFn();
   }
   try {
-    console.log('[DouyinPlayerHelper] Invoking start_douyin_danmu_listener with stop_listening signal.');
     const rustPayload: RustGetStreamUrlPayload = { 
       args: { room_id_str: "stop_listening" }, 
       platform: Platform.DOUYIN, 

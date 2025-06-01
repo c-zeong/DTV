@@ -11,13 +11,12 @@ export function useCategories(
   const cate3Map = ref<Record<number, Category3[]>>({})
   const isLoadingCate3 = ref(false)
 
-  // Temporary type definition matching Rust's FrontendCategoryResponse structure
-  // This should ideally be imported or be consistent with HomeView.vue's types
+
   interface RustFrontendCate3Item { id: string; name: string; }
   interface RustFrontendCate2Item { id: string; name: string; short_name: string; icon: string; cate3List: RustFrontendCate3Item[]; cate1Id?: number /* Will need to add this if C2s are flat */}
   interface RustFrontendCate1Item { id: string; name: string; cate2List: RustFrontendCate2Item[]; }
   
-  // Updated to match the new Rust response structure from fetch_categories
+
   interface RustFrontendCategoryResponse {
     cate1List: RustFrontendCate1Item[];
   }
@@ -39,13 +38,9 @@ export function useCategories(
         const allCate2: Category2[] = [];
 
         for (const c1 of fetchedCate1Items) {
-          // Assuming Category1 has fields like { cate1Id: number, cate1Name: string }
-          // And FrontendCate1Item has { id: string (numeric), name: string }
-          // This requires careful mapping based on actual Category1/Category2 types in ../types
           allCate1.push({ 
             cate1Id: parseInt(c1.id, 10), // Convert string ID to number
             cate1Name: c1.name 
-            // Potentially other fields if Category1 needs them
           });
 
           for (const c2 of c1.cate2List) {
@@ -55,20 +50,13 @@ export function useCategories(
               cate2Name: c2.name,
               shortName: c2.short_name,
               icon: c2.icon,
-              count: 0, // 'count' seems to be used in Category2 in ../types, default to 0 or get from API if available
-              // cate3List is not directly put into this flat list, handled by fetchThreeCate
+              count: 0,
             });
           }
         }
         
         cate1List.value = allCate1;
-        cate2List.value = allCate2; // This creates a flat list of all C2s
-
-        console.log('分类数据已更新', '一级分类数量:', cate1List.value.length, '二级分类数量:', cate2List.value.length)
-      } else {
-        // This else block might be redundant if invoke throws on non-success,
-        // but kept for safety if a non-error empty response is possible.
-        console.error('获取分类数据异常:响应中缺少 cate1List', response)
+        cate2List.value = allCate2;
       }
     } catch (error) {
       console.error('获取分类数据失败:', error)
@@ -76,7 +64,6 @@ export function useCategories(
     }
   }
 
-  // Assuming CommonPlatformCategoryRust from Rust maps to something like this in TS
   interface CommonPlatformCategory {
     id: string;
     name: string;
@@ -88,31 +75,19 @@ export function useCategories(
   const fetchThreeCate = async (cate2Id: number) => {
     isLoadingCate3.value = true
     try {
-      console.log(`开始获取三级分类数据(cate2Id: ${cate2Id})`)
-      // invoke directly returns the array of objects if the Rust command is successful
-      // The type assertion helps TypeScript understand the expected structure.
       const threeCategoriesResult = await invoke('fetch_three_cate', { tagId: cate2Id }) as CommonPlatformCategory[]
-      console.log(`获取到的三级分类数据(cate2Id: ${cate2Id}):`, threeCategoriesResult)
       
-      // Transform CommonPlatformCategory to local Category3 type
-      // Adjust this mapping based on your actual Category3 type definition
       const categoriesForMap: Category3[] = threeCategoriesResult.map(item => ({
         id: item.id,         // Assuming Category3 has an 'id' field (string)
-        name: item.name,       // Assuming Category3 has a 'name' field
-        // Example: if Category3 needs cate2Id, you already have it as a parameter
-        // cate2Id: cate2Id,
-        // Map other fields from 'item' to your 'Category3' structure as needed
+        name: item.name,
       }));
 
       cate3Map.value = {
         ...cate3Map.value,
         [cate2Id]: categoriesForMap
       }
-      console.log(`三级分类数据已更新(cate2Id: ${cate2Id}):`, cate3Map.value[cate2Id])
-
+      
     } catch (error) {
-      // Errors from invoke (e.g., if Rust returns Err) will be caught here
-      console.error(`获取三级分类数据异常(cate2Id: ${cate2Id}):`, error) 
       cate3Map.value = { ...cate3Map.value, [cate2Id]: [] } // Set to empty array on error
     } finally {
       isLoadingCate3.value = false
@@ -121,15 +96,12 @@ export function useCategories(
 
   const sortedCate2List = computed(() => {
     if (selectedCate1Id.value === null) {
-      console.log('未选择一级分类，二级分类列表为空')
       return []
     }
     
     const filtered = cate2List.value
       .filter(cate2 => cate2.cate1Id === selectedCate1Id.value)
       .sort((a, b) => b.count - a.count)
-    
-    console.log('筛选后的二级分类列表:', filtered, '基于一级分类ID:', selectedCate1Id.value)
     return filtered
   })
 
