@@ -132,6 +132,7 @@ const emit = defineEmits<{
   (e: 'close-player'): void;
   (e: 'fullscreen-change', isFullscreen: boolean): void;
   (e: 'request-refresh-details'): void;
+  (e: 'request-player-reload'): void;
 }>();
 
 const playerContainerRef = ref<HTMLDivElement | null>(null);
@@ -214,10 +215,6 @@ async function initializePlayerAndStream(
     art.value.destroy(true);
     art.value = null;
     await nextTick();
-    if (playerContainerRef.value) {
-        playerContainerRef.value.innerHTML = '';
-    }
-    await nextTick();
   }
 
   try {
@@ -287,32 +284,7 @@ async function initializePlayerAndStream(
             html: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path></svg>',
             tooltip: '刷新',
             click: async () => {
-              if (props.roomId && props.platform) {
-                isLoadingStream.value = true; // Visual feedback
-                streamError.value = null;     // Clear previous errors
-                isOfflineError.value = false; // Clear offline state
-
-                if (props.platform === Platform.DOUYU) {
-                  // For Douyu, trigger parent to re-fetch details.
-                  // Watcher will then call initializePlayerAndStream with isRefresh: false
-                  // and correct old/new room IDs.
-                  emit('request-refresh-details');
-                } else {
-                  // For Douyin etc., directly call initializePlayerAndStream.
-                  // Pass current room as "old" for cleanup, and "new" for re-init.
-                  // isRefresh must be false for a full refresh (clears danmaku, etc.).
-                  await initializePlayerAndStream(
-                    props.roomId,
-                    props.platform,
-                    props.streamUrl,
-                    false, // isRefresh = false
-                    props.roomId,    // oldRoomIdForCleanup
-                    props.platform   // oldPlatformForCleanup
-                  );
-                }
-              } else {
-                console.warn('[Player] Artplayer refresh: No roomId or platform available.');
-              }
+              emit('request-player-reload');
             }
           }, // Volume control, far right
         ],
@@ -481,29 +453,7 @@ async function stopCurrentDanmakuListener(platform?: Platform, roomId?: string |
 }
 
 const retryInitialization = () => {
-  if (props.roomId && props.platform) {
-    isLoadingStream.value = true; 
-    streamError.value = null; 
-    isOfflineError.value = false;
-
-    if (props.platform === Platform.DOUYU) {
-      emit('request-refresh-details');
-    } else {
-      // For Douyin etc., directly call initializePlayerAndStream.
-      // Pass current room as "old" for cleanup, and "new" for re-init.
-      // isRefresh is false by default, but being explicit.
-      initializePlayerAndStream(
-        props.roomId,
-        props.platform,
-        props.streamUrl,
-        false, // isRefresh = false
-        props.roomId,    // oldRoomIdForCleanup
-        props.platform   // oldPlatformForCleanup
-      );
-    }
-  } else {
-    console.warn('[Player] Retry initialization called but no roomId or platform.');
-  }
+  emit('request-player-reload');
 };
 
 watch([() => props.roomId, () => props.platform, () => props.streamUrl, () => props.avatar, () => props.title, () => props.anchorName, () => props.isLive], 

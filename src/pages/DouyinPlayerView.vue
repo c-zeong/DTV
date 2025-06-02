@@ -1,6 +1,7 @@
 <template>
   <div class="player-view">
     <MainPlayer
+      :key="playerKey"
       :room-id="props.roomId"
       :platform="Platform.DOUYIN"
       :is-followed="isFollowed"
@@ -8,12 +9,13 @@
       @unfollow="handleUnfollow"
       @close-player="handleClosePlayer"
       @fullscreen-change="handlePlayerFullscreenChange"
+      @request-player-reload="handlePlayerReload"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import MainPlayer from '../components/player/index.vue';
 import { useFollowStore } from '../store/followStore';
@@ -28,6 +30,7 @@ const emit = defineEmits(['fullscreen-change']);
 
 const router = useRouter();
 const followStore = useFollowStore();
+const playerKey = ref(0);
 
 const isFollowed = computed(() => {
   return followStore.isFollowed(Platform.DOUYIN, props.roomId);
@@ -57,6 +60,10 @@ const handleClosePlayer = () => {
 
 const handlePlayerFullscreenChange = (isFullscreen: boolean) => {
   emit('fullscreen-change', isFullscreen);
+};
+
+const handlePlayerReload = () => {
+  playerKey.value++;
 };
 
 </script>

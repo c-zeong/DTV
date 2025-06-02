@@ -14,7 +14,8 @@
       @unfollow="handleUnfollow" 
       @close-player="handleClosePlayer" 
       @fullscreen-change="handlePlayerFullscreenChange"
-      @request-refresh-details="handleRefreshDetails" />
+      @request-refresh-details="handleRefreshDetails"
+      @request-player-reload="handlePlayerReload" />
     <div v-else-if="roomId && isLoadingDetails" class="loading-details">
       <p>正在加载主播信息 ({{ roomId }})...</p>
     </div>
@@ -51,6 +52,7 @@ const followStore = useFollowStore();
 const streamerDetails = ref<StreamerDetails | null>(null);
 const isLoadingDetails = ref(false);
 const detailsError = ref<string | null>(null);
+const playerKey = ref(0);
 let hasLoadedDetailsForCurrentRoom = false; // Flag to prevent re-fetching for the same room ID
 
 const loadStreamerDetails = async (currentRoomId: string) => {
@@ -141,6 +143,16 @@ const handleRefreshDetails = () => {
     loadStreamerDetails(props.roomId);
   } else {
     console.warn('[DouyuPlayerView] request-refresh-details received but no roomId available.');
+  }
+};
+
+const handlePlayerReload = () => {
+  playerKey.value++;
+  if (props.roomId) {
+    hasLoadedDetailsForCurrentRoom = false; 
+    streamerDetails.value = null; 
+    detailsError.value = null;
+    loadStreamerDetails(props.roomId);
   }
 };
 

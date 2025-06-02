@@ -23,7 +23,6 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
-    "@types/hls.js": "^0.13.3",
     "@types/uuid": "^10.0.0",
     "@types/video.js": "^7.3.58",
     "@vitejs/plugin-vue": "^5.2.1",
