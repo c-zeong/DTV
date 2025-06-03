@@ -357,9 +357,6 @@ async function initializePlayerAndStream(
           await WebviewWindow.getCurrent().setFullscreen(nativeActive);
         } catch (e) {
           console.error('Tauri setFullscreen error triggered by player native fullscreen:', e);
-          // If OS fullscreen fails, our states might be desynced.
-          // Reverting Artplayer's fullscreen state is complex here.
-          // We might need to refresh `isFullScreen` if the OS call failed to reflect reality.
         }
       }
       emit('fullscreen-change', isFullScreen.value);

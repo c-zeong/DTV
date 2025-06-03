@@ -9,6 +9,7 @@
     "core:default",
     "opener:default",
     "core:window:allow-set-theme",
+    "core:window:allow-set-fullscreen",
     "os:default"
   ]
 }
