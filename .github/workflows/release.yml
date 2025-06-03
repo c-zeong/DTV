@@ -73,19 +73,6 @@ jobs:
 
       # Removed adjustment steps for macOS as default is now true
 
-      - name: Adjust tauri.conf.json for Windows
-        if: matrix.os == 'windows-latest'
-        run: |
-          (Get-Content src-tauri/tauri.conf.json -Raw) -replace '"macOSPrivateApi": true', '"macOSPrivateApi": false' | Set-Content src-tauri/tauri.conf.json
-        shell: powershell
-
-      - name: Adjust tauri.conf.json for Linux
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sed -i.bak 's/"macOSPrivateApi": true/"macOSPrivateApi": false/' src-tauri/tauri.conf.json && \
-          rm src-tauri/tauri.conf.json.bak
-        shell: bash
-
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
