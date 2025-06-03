@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::Message};
 use futures_util::{SinkExt, StreamExt};
-use tokio::time::Duration;
-use url::Url;
+use std::collections::HashMap;
+use tauri::{Emitter, Window};
 use tokio::sync::mpsc;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tauri::{Window, Emitter};
 use tokio::sync::oneshot;
+use tokio::time::Duration;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::Message};
+use url::Url;
 
 pub struct DanmakuClient {
     room_id: String,
@@ -26,7 +26,7 @@ impl DanmakuClient {
     fn encode_msg(&self, msg: &str) -> Vec<u8> {
         let msg_bytes = msg.as_bytes();
         let packet_len = msg_bytes.len() + 9;
-        
+
         let mut result = Vec::new();
         result.extend_from_slice(&(packet_len as u32).to_le_bytes());
         result.extend_from_slice(&(packet_len as u32).to_le_bytes());
@@ -35,24 +35,18 @@ impl DanmakuClient {
         result.push(0);
         result.extend_from_slice(msg_bytes);
         result.push(0);
-        
+
         result
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let url = Url::parse("wss://danmuproxy.douyu.com:8506/")?;
         let mut request = url.into_client_request()?;
-        request.headers_mut().insert(
-            "Sec-WebSocket-Protocol",
-            "binary".parse()?
-        );
+        request
+            .headers_mut()
+            .insert("Sec-WebSocket-Protocol", "binary".parse()?);
 
-        let (ws_stream, _) = connect_async_tls_with_config(
-            request,
-            None,
-            false,
-            None
-        ).await?;
+        let (ws_stream, _) = connect_async_tls_with_config(request, None, false, None).await?;
 
         let (mut write, mut read) = ws_stream.split();
 
@@ -68,12 +62,12 @@ impl DanmakuClient {
 
         // 创建消息通道
         let (tx, mut rx) = mpsc::channel(32);
-        
+
         // 启动心跳任务
         let heartbeat_msg = "type@=mrkl/";
         let heartbeat_data = self.encode_msg(heartbeat_msg);
         let tx_clone = tx.clone();
-        
+
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(45)).await;
@@ -126,14 +120,14 @@ impl DanmakuClient {
                                     );
                                 }
                             }
-                            
+
                             let event_name = format!("danmaku-{}", room_id_clone);
 
                             if result.get("type").map_or(false, |t| t == "chatmsg") {
                                 let unknown = "unknown".to_string();
                                 let empty = "".to_string();
                                 let zero = "0".to_string();
-                                
+
                                 let danmaku = serde_json::json!({
                                     "type": "chatmsg",
                                     "nickname": result.get("nn").unwrap_or(&unknown),
@@ -176,4 +170,4 @@ impl DanmakuClient {
         eprintln!("[Douyu Danmaku {}] Listener stopped.", room_id_clone);
         Ok(())
     }
-} 
+}

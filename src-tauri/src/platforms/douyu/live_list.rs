@@ -50,7 +50,7 @@ struct NewRecStreamerRaw {
     room_src: String, // Main cover image
     avatar: String,
     hn: String, // Viewers count string (e.g., "101.8万")
-    // rs_ext: Option<Vec<ImageRsExtRaw>>, // Removed as unused
+                // rs_ext: Option<Vec<ImageRsExtRaw>>, // Removed as unused
 }
 
 #[derive(Deserialize, Debug)]
@@ -73,11 +73,11 @@ struct DouyuV1Streamer {
     rn: String,
     nn: String,
     av: String,
-    ol: u32,    // Douyu online count
+    ol: u32,      // Douyu online count
     rs16: String, // Cover image
     #[serde(rename = "type")]
     stream_type: Option<u32>, // Example: type:1 might mean live
-                              // Add any other fields you might need, e.g. cid3 for verification
+                  // Add any other fields you might need, e.g. cid3 for verification
 }
 
 #[derive(Deserialize, Debug)]
@@ -138,7 +138,10 @@ pub async fn fetch_live_list(offset: u32, cate2: String, limit: u32) -> Frontend
     let text = match response.text().await {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("[Backend fetch_live_list] Error reading response text: {}", e);
+            eprintln!(
+                "[Backend fetch_live_list] Error reading response text: {}",
+                e
+            );
             return FrontendLiveListResponse {
                 error: 500,
                 msg: Some(format!("Failed to read response text: {}", e)),
@@ -146,24 +149,27 @@ pub async fn fetch_live_list(offset: u32, cate2: String, limit: u32) -> Frontend
             };
         }
     };
-    
 
-    match serde_json::from_str::<NewRecListApiResponse>(&text) { // Use new API response struct
+    match serde_json::from_str::<NewRecListApiResponse>(&text) {
+        // Use new API response struct
         Ok(douyu_response) => {
             if douyu_response.error == 0 {
                 if let Some(douyu_data) = douyu_response.data {
-                    let streamers_transformed: Vec<FrontendStreamer> = douyu_data.list.into_iter().map(|s_raw| {
-
-                        FrontendStreamer {
-                            rid: s_raw.rid.to_string(),
-                            room_name: s_raw.room_name,
-                            nickname: s_raw.nickname,
-                            avatar: s_raw.avatar,
-                            room_src: s_raw.room_src, // Using main room_src for now
-                            hn: s_raw.hn,
-                            is_live: Some(true), // Assuming all returned by this API are live
-                        }
-                    }).collect();
+                    let streamers_transformed: Vec<FrontendStreamer> = douyu_data
+                        .list
+                        .into_iter()
+                        .map(|s_raw| {
+                            FrontendStreamer {
+                                rid: s_raw.rid.to_string(),
+                                room_name: s_raw.room_name,
+                                nickname: s_raw.nickname,
+                                avatar: s_raw.avatar,
+                                room_src: s_raw.room_src, // Using main room_src for now
+                                hn: s_raw.hn,
+                                is_live: Some(true), // Assuming all returned by this API are live
+                            }
+                        })
+                        .collect();
 
                     let frontend_data = LiveListDataWrapper {
                         list: streamers_transformed,
@@ -175,26 +181,37 @@ pub async fn fetch_live_list(offset: u32, cate2: String, limit: u32) -> Frontend
                         data: Some(frontend_data),
                     }
                 } else {
-                    eprintln!("[Backend fetch_live_list] API success but no data field. Raw: {}", text);
+                    eprintln!(
+                        "[Backend fetch_live_list] API success but no data field. Raw: {}",
+                        text
+                    );
                     FrontendLiveListResponse {
-                        error: -1, 
+                        error: -1,
                         msg: Some("Douyu API success code but no data field.".to_string()),
                         data: None,
                     }
                 }
             } else {
-                eprintln!("[Backend fetch_live_list] API returned error {}. Msg: {:?}. Raw: {}", douyu_response.error, douyu_response.msg, text);
+                eprintln!(
+                    "[Backend fetch_live_list] API returned error {}. Msg: {:?}. Raw: {}",
+                    douyu_response.error, douyu_response.msg, text
+                );
                 FrontendLiveListResponse {
                     error: douyu_response.error,
-                    msg: douyu_response.msg.or_else(|| Some("Error from Douyu API".to_string())),
+                    msg: douyu_response
+                        .msg
+                        .or_else(|| Some("Error from Douyu API".to_string())),
                     data: None,
                 }
             }
         }
         Err(e) => {
-            eprintln!("[Backend fetch_live_list] Error parsing Douyu Mobile JSON: {}. Raw: {}", e, text);
+            eprintln!(
+                "[Backend fetch_live_list] Error parsing Douyu Mobile JSON: {}. Raw: {}",
+                e, text
+            );
             FrontendLiveListResponse {
-                error: -2, 
+                error: -2,
                 msg: Some(format!("Failed to parse Douyu API response: {}", e)),
                 data: None,
             }
@@ -204,9 +221,13 @@ pub async fn fetch_live_list(offset: u32, cate2: String, limit: u32) -> Frontend
 
 // New command for third-level categories
 #[command]
-pub async fn fetch_live_list_for_cate3(cate3_id: String, page: u32, limit: u32) -> FrontendLiveListResponse {
+pub async fn fetch_live_list_for_cate3(
+    cate3_id: String,
+    page: u32,
+    limit: u32,
+) -> FrontendLiveListResponse {
     let current_page = if page == 0 { 1 } else { page }; // Ensure page is at least 1 for the URL
-    
+
     let url = format!(
         "https://www.douyu.com/gapi/rkc/directory/mixListV1/3_{}/{}?limit={}",
         cate3_id, current_page, limit
@@ -249,7 +270,10 @@ pub async fn fetch_live_list_for_cate3(cate3_id: String, page: u32, limit: u32) 
     let text = match response.text().await {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("[Backend fetch_live_list_for_cate3] Error reading response text: {}", e);
+            eprintln!(
+                "[Backend fetch_live_list_for_cate3] Error reading response text: {}",
+                e
+            );
             return FrontendLiveListResponse {
                 error: 500,
                 msg: Some(format!("Failed to read response text: {}", e)),
@@ -262,19 +286,23 @@ pub async fn fetch_live_list_for_cate3(cate3_id: String, page: u32, limit: u32) 
         Ok(douyu_response) => {
             if douyu_response.code == 0 {
                 if let Some(douyu_data) = douyu_response.data {
-                    let streamers_transformed: Vec<FrontendStreamer> = douyu_data.rl.into_iter().map(|s| FrontendStreamer {
-                        rid: s.rid.to_string(),
-                        room_name: s.rn,
-                        nickname: s.nn,
-                        avatar: s.av, // This is usually a path, might need full URL prefix if not already there
-                        room_src: s.rs16,
-                        hn: s.ol.to_string(), // Convert online count to string
-                        is_live: Some(s.stream_type.map_or(true, |st| st == 1)), // Assume live if no type or type is 1
-                    }).collect();
-                    
+                    let streamers_transformed: Vec<FrontendStreamer> = douyu_data
+                        .rl
+                        .into_iter()
+                        .map(|s| FrontendStreamer {
+                            rid: s.rid.to_string(),
+                            room_name: s.rn,
+                            nickname: s.nn,
+                            avatar: s.av, // This is usually a path, might need full URL prefix if not already there
+                            room_src: s.rs16,
+                            hn: s.ol.to_string(), // Convert online count to string
+                            is_live: Some(s.stream_type.map_or(true, |st| st == 1)), // Assume live if no type or type is 1
+                        })
+                        .collect();
+
                     let total_returned = streamers_transformed.len() as u32;
                     let estimated_total = if total_returned < limit {
-                        (current_page -1) * limit + total_returned // If less than limit, means it's the last page
+                        (current_page - 1) * limit + total_returned // If less than limit, means it's the last page
                     } else {
                         current_page * limit + 1 // Otherwise, assume there's at least one more page
                     };
@@ -291,27 +319,35 @@ pub async fn fetch_live_list_for_cate3(cate3_id: String, page: u32, limit: u32) 
                 } else {
                     eprintln!("[Backend fetch_live_list_for_cate3] API success but no data field. Raw: {}", text);
                     FrontendLiveListResponse {
-                        error: -1, 
+                        error: -1,
                         msg: Some("Douyu API success code but no data field.".to_string()),
                         data: None,
                     }
                 }
             } else {
-                eprintln!("[Backend fetch_live_list_for_cate3] API returned error {}. Msg: {:?}. Raw: {}", douyu_response.code, douyu_response.msg, text);
+                eprintln!(
+                    "[Backend fetch_live_list_for_cate3] API returned error {}. Msg: {:?}. Raw: {}",
+                    douyu_response.code, douyu_response.msg, text
+                );
                 FrontendLiveListResponse {
                     error: douyu_response.code,
-                    msg: douyu_response.msg.or_else(|| Some("Error from Douyu API".to_string())),
+                    msg: douyu_response
+                        .msg
+                        .or_else(|| Some("Error from Douyu API".to_string())),
                     data: None,
                 }
             }
         }
         Err(e) => {
-            eprintln!("[Backend fetch_live_list_for_cate3] Error parsing Douyu V1 API JSON: {}. Raw: {}", e, text);
+            eprintln!(
+                "[Backend fetch_live_list_for_cate3] Error parsing Douyu V1 API JSON: {}. Raw: {}",
+                e, text
+            );
             FrontendLiveListResponse {
-                error: -2, 
+                error: -2,
                 msg: Some(format!("Failed to parse Douyu API response: {}", e)),
                 data: None,
             }
         }
     }
-} 
+}

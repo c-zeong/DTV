@@ -1,7 +1,7 @@
-use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue, USER_AGENT };
-use reqwest::{Client, Response, RequestBuilder, cookie::Jar};
-use std::time::Duration;
+use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue, USER_AGENT};
+use reqwest::{cookie::Jar, Client, RequestBuilder, Response};
 use std::sync::Arc;
+use std::time::Duration;
 
 pub const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36";
 const DEFAULT_TIMEOUT_SECONDS: u64 = 20;
@@ -17,7 +17,8 @@ impl HttpClient {
         let mut default_headers = ReqwestHeaderMap::new();
         default_headers.insert(
             USER_AGENT,
-            HeaderValue::from_str(DEFAULT_USER_AGENT).map_err(|e| format!("Invalid default user agent: {}", e))?,
+            HeaderValue::from_str(DEFAULT_USER_AGENT)
+                .map_err(|e| format!("Invalid default user agent: {}", e))?,
         );
 
         let cookie_jar = Arc::new(Jar::default());
@@ -25,8 +26,10 @@ impl HttpClient {
         let client_builder = Client::builder()
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECONDS))
             .cookie_provider(cookie_jar);
-        
-        let inner_client = client_builder.build().map_err(|e| format!("Failed to build reqwest client: {}", e))?;
+
+        let inner_client = client_builder
+            .build()
+            .map_err(|e| format!("Failed to build reqwest client: {}", e))?;
 
         Ok(HttpClient {
             inner: inner_client,
@@ -36,9 +39,8 @@ impl HttpClient {
 
     // Method to add or update a header for subsequent requests made with this client instance
     pub fn insert_header(&mut self, name: HeaderName, value: &str) -> Result<(), String> {
-        let header_value = HeaderValue::from_str(value).map_err(|e| {
-            format!("Failed to create header value for {}: {}", name, e)
-        })?;
+        let header_value = HeaderValue::from_str(value)
+            .map_err(|e| format!("Failed to create header value for {}: {}", name, e))?;
         self.headers.insert(name.clone(), header_value);
         Ok(())
     }
@@ -62,11 +64,15 @@ impl HttpClient {
     pub async fn get_text(&self, url: &str) -> Result<String, String> {
         let response = self.get(url).await?;
         let status = response.status();
-        let response_text = response.text().await.map_err(|e| {
-            format!("Failed to read response body from {}: {}", url, e)
-        })?;
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response body from {}: {}", url, e))?;
         if !status.is_success() {
-            return Err(format!("GET {} failed with status {}: {}", url, status, response_text));
+            return Err(format!(
+                "GET {} failed with status {}: {}",
+                url, status, response_text
+            ));
         }
         Ok(response_text)
     }
@@ -75,12 +81,19 @@ impl HttpClient {
         let response = self.get(url).await?;
         let status = response.status();
         if !status.is_success() {
-            let err_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(format!("GET JSON {} failed with status {}: {}", url, status, err_text));
+            let err_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error body".to_string());
+            return Err(format!(
+                "GET JSON {} failed with status {}: {}",
+                url, status, err_text
+            ));
         }
-        let json_response = response.json::<T>().await.map_err(|e| {
-            format!("Failed to parse JSON response from {}: {}", url, e)
-        })?;
+        let json_response = response
+            .json::<T>()
+            .await
+            .map_err(|e| format!("Failed to parse JSON response from {}: {}", url, e))?;
         Ok(json_response)
     }
 

@@ -19,8 +19,8 @@ pub struct LiveStreamInfo {
 pub struct DouyinApiResponse {
     pub status_code: i32,
     pub data: Option<MainDataContainer>, // data can be null or an object on error
-    // pub prompts: Option<String>, // Example: "该内容暂时无法无法查看"
-    // ... other top-level fields if any (e.g., extra, log_pb)
+                                         // pub prompts: Option<String>, // Example: "该内容暂时无法无法查看"
+                                         // ... other top-level fields if any (e.g., extra, log_pb)
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -38,8 +38,8 @@ pub struct RoomDataEntry {
     pub status: i32, // 2 for live, 4 for replay/not live
     #[serde(rename = "stream_url")]
     pub stream_url_container: Option<StreamUrlContainer>, // Changed from stream_url to avoid conflict if it were a simple string
-    // pub owner_user_id: Option<i64>,
-    // ... other fields from data.data[0]
+                                                          // pub owner_user_id: Option<i64>,
+                                                          // ... other fields from data.data[0]
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -65,8 +65,8 @@ pub struct StreamUrlContainer {
     pub hls_pull_url_map: Option<HashMap<String, String>>,
     #[serde(rename = "live_core_sdk_data")]
     pub live_core_sdk_data: Option<LiveCoreSdkData>, // For the nested JSON string
-    // pub default_resolution: Option<String>,
-    // ... other stream related fields
+                                                     // pub default_resolution: Option<String>,
+                                                     // ... other stream related fields
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -87,7 +87,7 @@ pub struct InnerStreamDataWrapper {
     // The actual qualities map might be nested further, e.g. under a "data" key or direct
     // Adjust based on actual structure of the stream_data JSON string
     pub data: Option<StreamQualitiesMap>, // Assuming it's like {"data": { "origin": ...}}
-    // Or if it's directly the map: #[serde(flatten)] pub qualities: StreamQualitiesMap,
+                                          // Or if it's directly the map: #[serde(flatten)] pub qualities: StreamQualitiesMap,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -108,8 +108,8 @@ pub struct StreamQualityDetail {
 pub struct StreamLinks {
     pub flv: Option<String>,
     pub hls: Option<String>, // Added HLS field based on typical structure
-    // pub cdn_multi_arc: Option<Value>,
-    // pub sdk_params: Option<String>,
+                             // pub cdn_multi_arc: Option<Value>,
+                             // pub sdk_params: Option<String>,
 }
 
 // Enum for stream resolutions, if needed for consistent key access
@@ -119,4 +119,4 @@ pub struct StreamLinks {
 //     Hd1,     // "HD1"
 //     Sd1,     // "SD1"
 //     Sd2,     // "SD2"
-// } 
+// }

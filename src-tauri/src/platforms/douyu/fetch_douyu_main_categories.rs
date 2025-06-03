@@ -4,16 +4,16 @@ use tauri::command;
 // Structs expected by the frontend
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FrontendCate3Item {
-    id: String, // cate3Id
+    id: String,   // cate3Id
     name: String, // cate3Name
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FrontendCate2Item {
-    id: String,        // cate2Id
-    name: String,      // cate2Name
+    id: String,         // cate2Id
+    name: String,       // cate2Name
     short_name: String, // shortName
-    icon: String,      // icon
+    icon: String,       // icon
     #[serde(rename = "cate3List")]
     cate3_list: Vec<FrontendCate3Item>, // Will be empty from this fetch
 }
@@ -61,9 +61,9 @@ struct JsonCate2Item {
     #[serde(rename = "shortName")]
     short_name: String,
     icon: String, // Assuming this is the desired icon URL
-    // pic: Option<String>, // Available but not currently used
-    // small_icon: Option<String>, // Available but not currently used
-    // count: Option<i32>, // Available but not currently used
+                  // pic: Option<String>, // Available but not currently used
+                  // small_icon: Option<String>, // Available but not currently used
+                  // count: Option<i32>, // Available but not currently used
 }
 
 // Removed DouyuCate3ItemRaw as it's not in this API response
@@ -107,24 +107,33 @@ struct RawFrontendCate1Item {
 }
 
 // New transformation function from Raw types to Frontend types
-fn transform_raw_to_frontend_items(raw_cate1_items: Vec<RawFrontendCate1Item>) -> Vec<FrontendCate1Item> {
-    raw_cate1_items.into_iter().map(|raw_c1_item| {
-        let frontend_c2_list = raw_c1_item.cate2_list.into_iter().map(|raw_c2_item| {
-            FrontendCate2Item {
-                id: raw_c2_item.id,
-                name: raw_c2_item.name,
-                short_name: raw_c2_item.short_name,
-                icon: raw_c2_item.icon,
-                cate3_list: Vec::new(), // Add empty cate3List as per FrontendCate2Item definition
-            }
-        }).collect();
+fn transform_raw_to_frontend_items(
+    raw_cate1_items: Vec<RawFrontendCate1Item>,
+) -> Vec<FrontendCate1Item> {
+    raw_cate1_items
+        .into_iter()
+        .map(|raw_c1_item| {
+            let frontend_c2_list = raw_c1_item
+                .cate2_list
+                .into_iter()
+                .map(|raw_c2_item| {
+                    FrontendCate2Item {
+                        id: raw_c2_item.id,
+                        name: raw_c2_item.name,
+                        short_name: raw_c2_item.short_name,
+                        icon: raw_c2_item.icon,
+                        cate3_list: Vec::new(), // Add empty cate3List as per FrontendCate2Item definition
+                    }
+                })
+                .collect();
 
-        FrontendCate1Item {
-            id: raw_c1_item.id,
-            name: raw_c1_item.name,
-            cate2_list: frontend_c2_list,
-        }
-    }).collect()
+            FrontendCate1Item {
+                id: raw_c1_item.id,
+                name: raw_c1_item.name,
+                cate2_list: frontend_c2_list,
+            }
+        })
+        .collect()
 }
 
 #[command]
@@ -158,7 +167,10 @@ async fn fetch_categories_douyu_raw() -> Result<Vec<RawFrontendCate1Item>, Strin
     match response {
         Ok(res) => {
             if res.status().is_success() {
-                let body_text = res.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
+                let body_text = res
+                    .text()
+                    .await
+                    .map_err(|e| format!("Failed to read response body: {}", e))?;
                 match serde_json::from_str::<DouyuCategoryApiResponse>(&body_text) {
                     Ok(parsed_response) => {
                         if parsed_response.error == 0 {
@@ -168,7 +180,8 @@ async fn fetch_categories_douyu_raw() -> Result<Vec<RawFrontendCate1Item>, Strin
 
                                 if let Some(raw_cate1_list) = douyu_data.cate1_info {
                                     for raw_c1_item in raw_cate1_list {
-                                        let mut c1_specific_cate2_list: Vec<RawFrontendCate2Item> = Vec::new();
+                                        let mut c1_specific_cate2_list: Vec<RawFrontendCate2Item> =
+                                            Vec::new();
                                         for raw_c2_item in &all_raw_c2_items {
                                             if raw_c2_item.parent_id == raw_c1_item.id {
                                                 c1_specific_cate2_list.push(RawFrontendCate2Item {
@@ -188,19 +201,28 @@ async fn fetch_categories_douyu_raw() -> Result<Vec<RawFrontendCate1Item>, Strin
                                 }
                                 Ok(cate1_list)
                             } else {
-                                Err(format!("Data field is missing. Code: {}, Msg: {:?}", parsed_response.error, parsed_response.msg))
+                                Err(format!(
+                                    "Data field is missing. Code: {}, Msg: {:?}",
+                                    parsed_response.error, parsed_response.msg
+                                ))
                             }
                         } else {
-                            Err(format!("Category API error. Code: {}, Msg: {:?}", parsed_response.error, parsed_response.msg))
+                            Err(format!(
+                                "Category API error. Code: {}, Msg: {:?}",
+                                parsed_response.error, parsed_response.msg
+                            ))
                         }
                     }
-                    Err(e) => Err(format!("Failed to parse category JSON: {}, Body: {}", e, body_text))
+                    Err(e) => Err(format!(
+                        "Failed to parse category JSON: {}, Body: {}",
+                        e, body_text
+                    )),
                 }
             } else {
                 Err(format!("Failed to fetch categories: HTTP {}", res.status()))
             }
         }
-        Err(e) => Err(format!("Error fetching categories: {}", e))
+        Err(e) => Err(format!("Error fetching categories: {}", e)),
     }
 }
 
@@ -208,4 +230,4 @@ async fn fetch_categories_douyu_raw() -> Result<Vec<RawFrontendCate1Item>, Strin
 // For example, in main.rs or lib.rs:
 // pub mod category;
 // And ensure this file is named category.rs in the correct directory.
-// And ensure this file is named category.rs in the correct directory. 
+// And ensure this file is named category.rs in the correct directory.

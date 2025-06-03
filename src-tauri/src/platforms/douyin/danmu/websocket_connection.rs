@@ -1,19 +1,19 @@
-use tokio_tungstenite::{connect_async, MaybeTlsStream};
+use chrono::Utc;
+use futures_util::{stream::SplitStream, SinkExt, StreamExt};
+use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{self, Sender};
-use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use futures_util::{StreamExt, SinkExt, stream::SplitStream};
-use std::time::Duration;
-use chrono::Utc;
+use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
+use tokio_tungstenite::{connect_async, MaybeTlsStream};
 use urlencoding;
 // use url::Url; // REMOVED AGAIN
 // use rand::Rng; // REMOVED AGAIN
 
 // Adjusted imports to use `super` for sibling modules within `danmu`
-use super::web_fetcher::DouyinLiveWebFetcher;
-use super::signature; // For generate_signature
 use super::gen::PushFrame; // Removed ::douyin
+use super::signature; // For generate_signature
+use super::web_fetcher::DouyinLiveWebFetcher;
 use prost::Message as ProstMessage; // For encoding heartbeat
 
 // Define a type alias for the WebSocket stream for brevity
@@ -29,7 +29,10 @@ pub async fn connect_and_manage_websocket(
     let ws_cookie_header = format!("ttwid={}", ttwid);
     let current_timestamp_ms = Utc::now().timestamp_millis();
     let first_req_ms = current_timestamp_ms - 100;
-    let cursor = format!("d-1_u-1_fh-7392091211001140287_t-{}_r-1", current_timestamp_ms);
+    let cursor = format!(
+        "d-1_u-1_fh-7392091211001140287_t-{}_r-1",
+        current_timestamp_ms
+    );
     let internal_ext_original = format!(
         "internal_src:dim|wss_push_room_id:{}|wss_push_did:7319483754668557238|first_req_ms:{}|fetch_time:{}|seq:1|wss_info:0-{}-0-0|wrds_v:7392094459690748497",
         room_id, first_req_ms, current_timestamp_ms, current_timestamp_ms
@@ -54,7 +57,6 @@ pub async fn connect_and_manage_websocket(
         signature
     );
 
-    
     let mut client_request = final_wss_url_str.into_client_request()?;
     let headers = client_request.headers_mut();
     headers.insert("User-Agent", fetcher.user_agent.parse()?);
@@ -93,7 +95,7 @@ pub async fn connect_and_manage_websocket(
                     if let Err(e) = write.send(msg_to_send).await {
                         println!("【X】消息发送任务错误: {}, 连接可能已断开", e);
                         // Potentially break or signal error if a crucial message (like ACK) fails
-                        if matches!(e, tokio_tungstenite::tungstenite::Error::ConnectionClosed | 
+                        if matches!(e, tokio_tungstenite::tungstenite::Error::ConnectionClosed |
                                        tokio_tungstenite::tungstenite::Error::AlreadyClosed) {
                             break; // Stop if connection is closed
                         }
@@ -109,4 +111,4 @@ pub async fn connect_and_manage_websocket(
     });
 
     Ok((read, tx)) // Return the read stream and the sender for other tasks to send messages
-} 
+}

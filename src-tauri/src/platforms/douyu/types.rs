@@ -6,19 +6,19 @@ pub struct DouyuGameCategory {
     pub cate_id: String, // Category ID, Douyu might use `tag_id` or `cate_id` interchangeably in different APIs
     pub game_name: String, // Full name of the game/category
     pub short_name: Option<String>, // Short name (e.g., lol, dota2)
-    pub game_url: Option<String>,   // URL path segment for this category
-    pub game_icon: Option<String>,  // URL for category icon
-    pub game_src: Option<String>,   // URL for a larger banner/image
-    // pub count: Option<i32>,      // Sometimes live stream count is included
-    // pub is_child_cate: Option<i32>, // Indicator for sub-categories
-    // pub child_cates: Option<Vec<DouyuGameCategory>>, // Nested sub-categories
+    pub game_url: Option<String>, // URL path segment for this category
+    pub game_icon: Option<String>, // URL for category icon
+    pub game_src: Option<String>, // URL for a larger banner/image
+                         // pub count: Option<i32>,      // Sometimes live stream count is included
+                         // pub is_child_cate: Option<i32>, // Indicator for sub-categories
+                         // pub child_cates: Option<Vec<DouyuGameCategory>>, // Nested sub-categories
 }
 
 // Represents a group of categories (e.g., "热门游戏", "网游竞技")
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DouyuCategoryGroup {
-    pub tag_id: String, // Group ID
-    pub tag_name: String, // Group name
+    pub tag_id: String,           // Group ID
+    pub tag_name: String,         // Group name
     pub icon_url: Option<String>, // Optional icon for the group
     #[serde(alias = "list", alias = "cate_list")] // Douyu API can be inconsistent with field names
     pub categories: Vec<DouyuGameCategory>, // List of categories within this group
@@ -50,14 +50,14 @@ pub struct DouyuRoomInCategory {
     pub room_name: String,
     pub nickname: String,
     pub owner_uid: Option<String>,
-    pub avatar_mid: Option<String>, // Streamer avatar
-    pub online: i64, // Viewer count
-    pub show_status: String, // "1" for live
-    pub room_src: Option<String>, // Thumbnail image for the room
+    pub avatar_mid: Option<String>,    // Streamer avatar
+    pub online: i64,                   // Viewer count
+    pub show_status: String,           // "1" for live
+    pub room_src: Option<String>,      // Thumbnail image for the room
     pub category_name: Option<String>, // Cate name
-    pub cate_id: Option<String>, // Category id
-    pub is_vertical: Option<i32>, // If it's a vertical/mobile stream
-    pub vertical_src: Option<String>, // Thumbnail for vertical stream
+    pub cate_id: Option<String>,       // Category id
+    pub is_vertical: Option<i32>,      // If it's a vertical/mobile stream
+    pub vertical_src: Option<String>,  // Thumbnail for vertical stream
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -76,4 +76,4 @@ pub struct DouyuRoomsInCateListData {
 pub struct DouyuRoomsInCateResponse {
     pub error: i32,
     pub data: Option<DouyuRoomsInCateListData>,
-} 
+}

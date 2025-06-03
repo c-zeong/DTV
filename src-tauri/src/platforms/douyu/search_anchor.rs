@@ -1,8 +1,8 @@
+use isahc::config::{Configurable, RedirectPolicy}; // For HttpClient configuration
+use isahc::{http, prelude::*, HttpClient, Request}; // For HTTP client and request building
 use md5::Digest; // For hasher
-use std::time::{SystemTime, UNIX_EPOCH}; // For timestamp for did
-use isahc::{prelude::*, HttpClient, Request, http}; // For HTTP client and request building
-use isahc::config::{RedirectPolicy, Configurable}; // For HttpClient configuration
-use percent_encoding::{percent_encode, NON_ALPHANUMERIC}; // For URL encoding keyword
+use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
+use std::time::{SystemTime, UNIX_EPOCH}; // For timestamp for did // For URL encoding keyword
 
 // Renamed from search_anchor to avoid ambiguity with Tauri command
 pub async fn perform_anchor_search(keyword: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -12,10 +12,12 @@ pub async fn perform_anchor_search(keyword: &str) -> Result<String, Box<dyn std:
         .build()?;
 
     let mut hasher = md5::Md5::new();
-    hasher.update(SystemTime::now()
-        .duration_since(UNIX_EPOCH)?
-        .as_nanos()
-        .to_string());
+    hasher.update(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_nanos()
+            .to_string(),
+    );
     let did = format!("{:x}", hasher.finalize());
 
     let url = format!(
@@ -32,6 +34,6 @@ pub async fn perform_anchor_search(keyword: &str) -> Result<String, Box<dyn std:
 
     let mut response = client.send(request)?;
     let text = response.text()?;
-    
+
     Ok(text)
 }

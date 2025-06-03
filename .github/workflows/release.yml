@@ -68,6 +68,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Add Tauri OS plugin
+        run: npm run tauri add os
+
       # Removed adjustment steps for macOS as default is now true
 
       - name: Adjust tauri.conf.json for Windows

@@ -20,7 +20,7 @@ pub struct CommonPlatformCategoryRust {
     pub icon_url: Option<String>,
     #[serde(rename = "parentId")]
     pub parent_id: Option<String>, // Optional, if categories are hierarchical
-    // Add any other common fields
+                                   // Add any other common fields
 }
 
 // Struct mirroring TypeScript CommonCategoryGroup
@@ -30,4 +30,4 @@ pub struct CommonCategoryGroupRust {
     pub group_name: String,
     pub platform: SupportedPlatformRust,
     pub categories: Vec<CommonPlatformCategoryRust>,
-} 
+}

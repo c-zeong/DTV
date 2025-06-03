@@ -1,12 +1,12 @@
 use actix_web::{dev::ServerHandle, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 // use tokio::sync::Mutex as TokioMutex; // Not used here
-use std::sync::Mutex as StdMutex;
-use tauri::{AppHandle, State}; // Removed unused Manager and async_runtime
+use futures_util::TryStreamExt;
 use reqwest::Client; // Changed from awc::Client
-use futures_util::TryStreamExt; // For map_err on the stream
+use std::sync::Mutex as StdMutex;
+use tauri::{AppHandle, State}; // Removed unused Manager and async_runtime // For map_err on the stream
 
 // Changed path: StreamUrlStore is now at the crate root (main.rs)
-use crate::StreamUrlStore; 
+use crate::StreamUrlStore;
 
 // Define a struct to hold the server handle in a Tauri managed state
 #[derive(Default)]
@@ -84,10 +84,9 @@ async fn flv_proxy_handler(
     }
 }
 
-
 #[tauri::command]
 pub async fn start_proxy(
-    _app_handle: AppHandle, 
+    _app_handle: AppHandle,
     server_handle_state: State<'_, ProxyServerHandle>,
     stream_url_store: State<'_, StreamUrlStore>,
 ) -> Result<String, String> {
@@ -97,17 +96,15 @@ pub async fn start_proxy(
     if current_stream_url.is_empty() {
         return Err("Stream URL is not set in store. Cannot start proxy.".to_string());
     }
-    
+
     // stream_url_data_for_actix can be created once and cloned, as StreamUrlStore is Arc based and Send + Sync
     let stream_url_data_for_actix = web::Data::new(stream_url_store.inner().clone());
     // REMOVED: let awc_client_for_actix = web::Data::new(Client::default());
 
     // Ensure MutexGuard is dropped before .await
-    let existing_handle_to_stop = {
-        server_handle_state.0.lock().unwrap().take()
-    };
+    let existing_handle_to_stop = { server_handle_state.0.lock().unwrap().take() };
     if let Some(existing_handle) = existing_handle_to_stop {
-        existing_handle.stop(false).await; 
+        existing_handle.stop(false).await;
     }
 
     let server = match HttpServer::new(move || {
@@ -120,10 +117,14 @@ pub async fn start_proxy(
             .wrap(actix_cors::Cors::permissive())
             .route("/live.flv", web::get().to(flv_proxy_handler))
     })
-    .bind(("127.0.0.1", port)) {
+    .bind(("127.0.0.1", port))
+    {
         Ok(srv) => srv,
         Err(e) => {
-            let err_msg = format!("[Rust/proxy.rs] Failed to bind server to port {}: {}", port, e);
+            let err_msg = format!(
+                "[Rust/proxy.rs] Failed to bind server to port {}: {}",
+                port, e
+            );
             eprintln!("{}", err_msg);
             return Err(err_msg);
         }
@@ -141,19 +142,15 @@ pub async fn start_proxy(
             println!("[Rust/proxy.rs] Proxy server on port {} shut down.", port);
         }
     });
-    
+
     let proxy_url = format!("http://127.0.0.1:{}/live.flv", port);
     Ok(proxy_url)
 }
 
 #[tauri::command]
-pub async fn stop_proxy(
-    server_handle_state: State<'_, ProxyServerHandle>
-) -> Result<(), String> {
+pub async fn stop_proxy(server_handle_state: State<'_, ProxyServerHandle>) -> Result<(), String> {
     // Ensure MutexGuard is dropped before .await
-    let handle_to_stop = {
-        server_handle_state.0.lock().unwrap().take()
-    }; 
+    let handle_to_stop = { server_handle_state.0.lock().unwrap().take() };
 
     if let Some(handle) = handle_to_stop {
         handle.stop(false).await; // Changed to non-graceful shutdown
@@ -162,4 +159,4 @@ pub async fn stop_proxy(
         println!("[Rust/proxy.rs] stop_proxy command: No proxy server was running or handle already taken.");
     }
     Ok(())
-} 
+}

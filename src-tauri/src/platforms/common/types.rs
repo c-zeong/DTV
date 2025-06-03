@@ -55,4 +55,4 @@ pub struct DouyinDanmakuState(pub std::sync::Mutex<Option<tokio::sync::mpsc::Sen
 // State for the Douyu Danmaku listener
 #[derive(Default)]
 #[allow(dead_code)]
-pub struct DouyuDanmakuState(pub std::sync::Mutex<Option<tokio::sync::mpsc::Sender<()>>>); 
+pub struct DouyuDanmakuState(pub std::sync::Mutex<Option<tokio::sync::mpsc::Sender<()>>>);
