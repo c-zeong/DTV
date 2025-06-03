@@ -25,16 +25,15 @@
 ## 软件截图
 
 <div align="center">
-  <div style="display: flex; justify-content: center; gap: 20px;">
-    <div>
-      <img src="images/iShot_light.png" alt="日间模式" width="400">
-      <p>日间模式</p>
-    </div>
-    <div>
-      <img src="images/iShot_dark.png" alt="夜间模式" width="400"> 
-      <p>夜间模式</p>
-    </div>
-  </div>
+  <p>日间模式</p>
+  <img src="images/iShot_light.png" alt="日间模式" style="width: 100%; max-width: 800px; display: block; margin-left: auto; margin-right: auto;">
+</div>
+
+<br>
+
+<div align="center">
+  <p>夜间模式</p>
+  <img src="images/iShot_dark.png" alt="夜间模式" style="width: 100%; max-width: 800px; display: block; margin-left: auto; margin-right: auto;">
 </div>
 
 ## 安装方式
